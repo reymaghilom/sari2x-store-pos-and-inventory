@@ -1,0 +1,6 @@
+import { getDatabase, runInTransaction } from '@/database'; import { createId, nowIso } from '@/database/ids'; import { queueSync } from '@/database/syncQueue';
+export async function getSetting(key: string) { const db = await getDatabase(); return (await db.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', key))?.value ?? null; }
+export async function setSetting(key: string, value: string) { const now = nowIso(); await runInTransaction(async (db) => { await db.runAsync('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', key, value, now); await queueSync(db, 'settings', key, 'update', { key, value }); }); }
+export const getLocalSetting = getSetting;
+export async function setLocalSetting(key: string, value: string) { const db = await getDatabase(); await db.runAsync('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', key, value, nowIso()); }
+export async function ensureDeviceId() { const existing = await getLocalSetting('sync_device_id'); if (existing) return existing; const id = createId(); await setLocalSetting('sync_device_id', id); return id; }

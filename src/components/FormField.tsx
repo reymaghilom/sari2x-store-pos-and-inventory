@@ -1,0 +1,3 @@
+import { colors, radius, spacing, typography } from '@/constants/theme'; import { StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native';
+export function FormField({ label, ...props }: TextInputProps & { label: string }) { return <View style={styles.group}><Text style={styles.label}>{label}</Text><TextInput placeholderTextColor={colors.textMuted} style={styles.input} {...props} /></View>; }
+const styles = StyleSheet.create({ group: { gap: spacing.sm }, label: { color: colors.text, fontSize: typography.bodySmall, fontWeight: typography.semibold }, input: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, backgroundColor: colors.surface, color: colors.text, fontSize: typography.body } });

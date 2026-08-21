@@ -1,0 +1,38 @@
+export type UserRole = 'admin' | 'staff';
+export type AppUser = { id: string; name: string; username: string; role: UserRole };
+export type Product = { id: string; name: string; category: string; price: number; costPrice: number; stock: number; icon: string; barcode: string; lowStockThreshold: number; description: string };
+export type Transaction = { saleId: string; id: string; time: string; amount: number; cashier: string; status: 'Completed' | 'Held' };
+export type CartItem = { productId: string; quantity: number };
+export type Customer = { id: string; name: string; phone: string; address?: string; creditLimit: number; utang: number };
+export type CreditStatus = 'Due' | 'Overdue' | 'Paid';
+export type CreditRecord = { id: string; customerId: string; date: string; dueDate: string; description: string; amount: number; remaining: number; notes?: string; status: CreditStatus };
+export type PaymentMethod = 'Cash' | 'GCash' | 'Maya' | 'Utang';
+export type PaymentRecord = { id: string; customerId: string; date: string; amount: number; method: Exclude<PaymentMethod, 'Utang'>; reference?: string };
+export type CompletedSale = { saleId: string; id: string; date: string; cashier: string; customer: string; paymentMethod: PaymentMethod; total: number; cashReceived?: number; change?: number };
+export type SaleReceiptItem = { id: string; productName: string; quantity: number; unitPrice: number; lineTotal: number };
+export type SaleReceipt = {
+  saleId: string;
+  transactionNumber: string;
+  createdAt: string;
+  status: 'Completed' | 'Held';
+  cashier: string;
+  customer: string;
+  paymentMethod: PaymentMethod;
+  subtotal: number;
+  discount: number;
+  total: number;
+  cashReceived?: number;
+  change?: number;
+  reference?: string;
+  dueDate?: string;
+  storeName: string;
+  storeAddress?: string;
+  storePhone?: string;
+  items: SaleReceiptItem[];
+};
+export type StaffAccount = { id: string; name: string; username: string; role: UserRole; active: boolean };
+export type ReportSnapshot = {
+  sales: { totalSales: number; totalProfit: number; transactionCount: number; averageSale: number; topProducts: { name: string; quantity: number; total: number }[]; byCashier: { name: string; total: number; count: number }[] };
+  inventory: { totalProducts: number; inventoryValue: number; lowStock: number; outOfStock: number };
+  utang: { totalOutstanding: number; totalCollected: number; customersWithUtang: number; overdue: number };
+};
