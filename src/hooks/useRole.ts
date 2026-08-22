@@ -1,5 +1,5 @@
 import { useAuth } from '@/store/auth';
 export const useRole = () => {
-  const { user, isAdmin } = useAuth();
-  return { role: user?.role, isAdmin, canManageStaff: isAdmin, canAccessCriticalSettings: isAdmin };
+  const { user, isOwner } = useAuth();
+  return { role: user?.role, isOwner, isAdmin: isOwner, canManageStaff: false, canAccessCriticalSettings: isOwner, canReverseTransactions: isOwner };
 };

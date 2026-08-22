@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": "../../../.expo/edge-logic-tests",
+    "rootDir": "..",
+    "skipLibCheck": true
+  },
+  "include": ["../store-admin/logic.ts", "store-admin-logic.test.ts"]
+}

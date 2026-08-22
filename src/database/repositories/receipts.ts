@@ -5,7 +5,7 @@ type ReceiptRow = {
   id: string;
   transaction_number: string;
   created_at: string;
-  status: 'completed' | 'held';
+  status: 'completed' | 'held' | 'voided' | 'refunded' | 'partially_refunded' | 'cancelled';
   cashier: string | null;
   customer: string | null;
   payment_method: PaymentMethod;
@@ -16,6 +16,12 @@ type ReceiptRow = {
   change_amount: number | null;
   reference_number: string | null;
   due_date: string | null;
+  notes: string | null;
+  reversal_reason: string | null;
+  reversed_by: string | null;
+  reversed_at: string | null;
+  refund_amount: number | null;
+  refund_method: string | null;
 };
 
 type ReceiptItemRow = {
@@ -49,11 +55,24 @@ export async function getSaleReceipt(saleId: string): Promise<SaleReceipt | null
           FROM credit_transactions ct
          WHERE ct.sale_id = s.id AND ct.deleted_at IS NULL
          ORDER BY ct.created_at ASC
-         LIMIT 1) AS due_date
+         LIMIT 1) AS due_date,
+       (SELECT ct.notes
+          FROM credit_transactions ct
+         WHERE ct.sale_id = s.id AND ct.deleted_at IS NULL
+         ORDER BY ct.created_at ASC
+         LIMIT 1) AS notes,
+       COALESCE(v.reason, r.reason) AS reversal_reason,
+       ru.name AS reversed_by,
+       COALESCE(v.created_at, r.created_at) AS reversed_at,
+       r.amount AS refund_amount,
+       r.refund_method
      FROM sales s
      LEFT JOIN users u ON u.id = s.cashier_id
      LEFT JOIN customers c ON c.id = s.customer_id
-     WHERE s.id = ? AND s.deleted_at IS NULL AND s.status != 'voided'
+     LEFT JOIN sale_voids v ON v.sale_id = s.id AND v.deleted_at IS NULL
+     LEFT JOIN sale_refunds r ON r.sale_id = s.id AND r.deleted_at IS NULL
+     LEFT JOIN users ru ON ru.id = COALESCE(v.created_by, r.created_by)
+     WHERE s.id = ? AND s.deleted_at IS NULL
      LIMIT 1`,
     saleId,
   );
@@ -89,7 +108,7 @@ export async function getSaleReceipt(saleId: string): Promise<SaleReceipt | null
     saleId: sale.id,
     transactionNumber: sale.transaction_number,
     createdAt: sale.created_at,
-    status: sale.status === 'held' ? 'Held' : 'Completed',
+    status: ({ completed: 'Completed', held: 'Held', voided: 'Voided', refunded: 'Refunded', partially_refunded: 'Partially Refunded', cancelled: 'Cancelled' } as const)[sale.status],
     cashier: sale.cashier ?? 'Unknown cashier',
     customer: sale.customer ?? 'Walk-in Customer',
     paymentMethod: sale.payment_method,
@@ -100,9 +119,15 @@ export async function getSaleReceipt(saleId: string): Promise<SaleReceipt | null
     change: sale.change_amount ?? undefined,
     reference: sale.reference_number || undefined,
     dueDate: sale.due_date || undefined,
+    notes: sale.notes || undefined,
     storeName: settings.store_name || 'Sari-sari Store',
     storeAddress: settings.store_address || undefined,
     storePhone: settings.store_phone || undefined,
     items,
+    reversalReason: sale.reversal_reason ?? undefined,
+    reversedBy: sale.reversed_by ?? undefined,
+    reversedAt: sale.reversed_at ?? undefined,
+    refundAmount: sale.refund_amount ?? undefined,
+    refundMethod: sale.refund_method ?? undefined,
   };
 }

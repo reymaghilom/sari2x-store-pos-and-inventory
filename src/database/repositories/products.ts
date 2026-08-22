@@ -3,7 +3,7 @@ import { createId, nowIso } from '@/database/ids';
 import { queueSync } from '@/database/syncQueue';
 import { Product } from '@/types';
 
-export type ProductInput = Omit<Product, 'id' | 'icon' | 'stock'> & { stock?: number; icon?: string };
+export type ProductInput = Omit<Product, 'id' | 'icon' | 'imageUri' | 'stock'> & { stock?: number; imageUri?: string | null };
 
 type ProductRow = {
   id: string;
@@ -20,7 +20,7 @@ type ProductRow = {
 
 const productSelect = 'SELECT p.id, p.name, c.name AS category, p.selling_price, p.cost_price, p.barcode, p.low_stock_threshold, p.description, p.image_uri, p.cached_stock FROM products p LEFT JOIN categories c ON c.id = p.category_id';
 
-const productIcon = (row: ProductRow) => row.image_uri || (
+const productIcon = (row: ProductRow) => (
   row.category === 'Beverages'
     ? (row.name.includes('Sprite') ? '🍾' : '🥤')
     : row.category === 'Snacks'
@@ -43,6 +43,7 @@ const mapProduct = (row: ProductRow): Product => ({
   description: row.description ?? '',
   stock: row.cached_stock,
   icon: productIcon(row),
+  imageUri: row.image_uri ?? undefined,
 });
 
 export class BarcodeConflictError extends Error {
@@ -115,7 +116,7 @@ export async function createProduct(input: ProductInput) {
       await db.runAsync(
         'INSERT INTO products (id, name, category_id, selling_price, cost_price, barcode, low_stock_threshold, description, image_uri, cached_stock, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)',
         id, input.name, categoryId, input.price, input.costPrice, barcode || null, input.lowStockThreshold,
-        input.description || null, input.icon || null, initialStock, now, now,
+        input.description || null, input.imageUri || null, initialStock, now, now,
       );
       if (initialStock > 0) {
         const movementId = createId();
@@ -126,7 +127,8 @@ export async function createProduct(input: ProductInput) {
         );
         await queueSync(db, 'stock_movements', movementId, 'create', { id: movementId, productId: id, type: 'stock_in', quantity: initialStock });
       }
-      await queueSync(db, 'products', id, 'create', { ...input, barcode, id });
+      const syncInput = { ...input }; delete syncInput.imageUri;
+      await queueSync(db, 'products', id, 'create', { ...syncInput, barcode, id });
     });
   } catch (error) {
     translateBarcodeConstraint(error);
@@ -137,7 +139,7 @@ export async function createProduct(input: ProductInput) {
 export async function updateProductRecord(id: string, input: Partial<ProductInput>) {
   const now = nowIso();
   try {
-    await runInTransaction(async (db) => {
+    return await runInTransaction(async (db) => {
       const current = await db.getFirstAsync<ProductRow>(`${productSelect} WHERE p.id = ?`, id);
       if (!current) throw new Error('Product not found.');
       const category = input.category ?? current.category;
@@ -149,13 +151,21 @@ export async function updateProductRecord(id: string, input: Partial<ProductInpu
         input.name ?? current.name, categoryId, input.price ?? current.selling_price,
         input.costPrice ?? current.cost_price, barcode || null,
         input.lowStockThreshold ?? current.low_stock_threshold,
-        input.description ?? current.description, input.icon ?? current.image_uri, now, id,
+        input.description ?? current.description, input.imageUri === undefined ? current.image_uri : input.imageUri, now, id,
       );
-      await queueSync(db, 'products', id, 'update', { ...input, ...(input.barcode === undefined ? {} : { barcode }) });
+      const syncInput = { ...input }; delete syncInput.imageUri;
+      await queueSync(db, 'products', id, 'update', { ...syncInput, ...(input.barcode === undefined ? {} : { barcode }) });
+      return current.image_uri;
     });
   } catch (error) {
     translateBarcodeConstraint(error);
   }
+}
+
+export async function isProductImageUriInUse(uri: string) {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM products WHERE image_uri = ? AND deleted_at IS NULL', uri);
+  return (row?.count ?? 0) > 0;
 }
 
 export async function setProductActive(id: string, active: boolean) {

@@ -32,9 +32,15 @@ async function main() {
   if (!url || !key) throw new Error('MISSING_PUBLIC_CONFIG');
   if (isPrivateKey(key)) throw new Error('PRIVATE_KEY_REJECTED');
   const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
-  const { error } = await client.from('categories').select('id').limit(1);
-  if (error) throw new Error(`READ_FAILED_${error.code || 'UNKNOWN'}`);
-  console.log('Supabase read check passed: categories is accessible.');
+  const tables = ['users', 'categories', 'products', 'customers', 'sales', 'sale_items', 'stock_movements', 'credit_transactions', 'credit_payments', 'sale_voids', 'sale_refunds', 'sale_refund_items', 'settings'];
+  const counts = {};
+  for (const table of tables) {
+    const { count, error } = await client.from(table).select('*', { count: 'exact', head: true });
+    if (error) throw new Error(`READ_FAILED_${table}_${error.code || 'UNKNOWN'}`);
+    counts[table] = count ?? 0;
+  }
+  console.log(`Supabase read checks passed: ${tables.length} synchronized tables are accessible.`);
+  console.log(Object.entries(counts).map(([table, count]) => `${table}=${count}`).join(', '));
 }
 
 main().catch((error) => {

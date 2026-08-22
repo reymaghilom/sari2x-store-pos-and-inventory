@@ -1,8 +1,34 @@
-import { hashCredential } from '@/database/credentials'; import { getDatabase, runInTransaction } from '@/database'; import { createId, nowIso } from '@/database/ids'; import { queueSync } from '@/database/syncQueue'; import { AppUser, StaffAccount, UserRole } from '@/types';
+import { hashCredential } from '@/database/credentials'; import { getDatabase, runInTransaction } from '@/database'; import { nowIso } from '@/database/ids'; import { AppUser, UserRole } from '@/types';
 type UserRow = { id: string; name: string; username: string; password_hash: string; role: UserRole; status: 'active' | 'disabled' };
-export async function authenticateUser(username: string, password: string): Promise<AppUser | null> { const db = await getDatabase(); const normalized = username.trim().toLowerCase(); const row = await db.getFirstAsync<UserRow>('SELECT id, name, username, password_hash, role, status FROM users WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL', normalized); if (!row || row.status !== 'active') return null; const hash = await hashCredential(normalized, password); return hash === row.password_hash ? { id: row.id, name: row.name, username: row.username, role: row.role } : null; }
-export async function listUsers(): Promise<StaffAccount[]> { const db = await getDatabase(); const rows = await db.getAllAsync<UserRow>('SELECT id, name, username, password_hash, role, status FROM users WHERE deleted_at IS NULL ORDER BY CASE role WHEN \'admin\' THEN 0 ELSE 1 END, name'); return rows.map((row) => ({ id: row.id, name: row.name, username: row.username, role: row.role, active: row.status === 'active' })); }
-export async function createStaff(name: string, username: string, password = '1234') { const id = createId(); const now = nowIso(); const normalized = username.trim().toLowerCase(); const hash = await hashCredential(normalized, password); await runInTransaction(async (db) => { await db.runAsync('INSERT INTO users (id, name, username, password_hash, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', id, name.trim(), normalized, hash, 'staff', 'active', now, now); await queueSync(db, 'users', id, 'create', { id, name: name.trim(), username: normalized, role: 'staff', status: 'active' }); }); return id; }
-export async function updateStaffName(id: string, name: string) { const now = nowIso(); await runInTransaction(async (db) => { await db.runAsync('UPDATE users SET name = ?, updated_at = ? WHERE id = ?', name.trim(), now, id); await queueSync(db, 'users', id, 'update', { name: name.trim() }); }); }
-export async function setStaffEnabled(id: string, active: boolean) { const now = nowIso(); await runInTransaction(async (db) => { const user = await db.getFirstAsync<{ role: UserRole }>('SELECT role FROM users WHERE id = ?', id); if (!user || user.role === 'admin') throw new Error('Admin account status cannot be changed.'); const status = active ? 'active' : 'disabled'; await db.runAsync('UPDATE users SET status = ?, updated_at = ? WHERE id = ?', status, now, id); await queueSync(db, 'users', id, 'update', { status }); }); }
-export async function resetStaffCredential(id: string, password = '1234') { const db = await getDatabase(); const user = await db.getFirstAsync<{ username: string }>('SELECT username FROM users WHERE id = ?', id); if (!user) throw new Error('User not found.'); const hash = await hashCredential(user.username, password); const now = nowIso(); await runInTransaction(async (transaction) => { await transaction.runAsync('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?', hash, now, id); await queueSync(transaction, 'users', id, 'update', { credential_reset: true }); }); }
+export const OWNER_PIN_LENGTH = 4;
+export const isValidOwnerPin = (pin: string) => /^\d{4}$/.test(pin);
+async function ownerRow() {
+  const db = await getDatabase();
+  return db.getFirstAsync<UserRow>(`SELECT u.id, u.name, u.username, u.password_hash, u.role, u.status
+    FROM users u JOIN settings s ON s.key = 'owner_user_id' AND s.value = u.id
+    WHERE u.deleted_at IS NULL LIMIT 1`);
+}
+export async function getOwner(): Promise<AppUser> {
+  const row = await ownerRow();
+  if (!row) throw new Error('Owner account is unavailable.');
+  return { id: row.id, name: 'Owner', username: row.username, role: 'admin' };
+}
+export async function authenticateOwnerPin(pin: string): Promise<AppUser | null> {
+  if (!isValidOwnerPin(pin)) return null;
+  const row = await ownerRow();
+  if (!row || row.status !== 'active') return null;
+  const hash = await hashCredential(row.username, pin);
+  return hash === row.password_hash ? { id: row.id, name: 'Owner', username: row.username, role: 'admin' } : null;
+}
+export async function changeOwnerPin(currentPin: string, nextPin: string) {
+  if (!isValidOwnerPin(currentPin) || !isValidOwnerPin(nextPin)) throw new Error('PINs must contain exactly 4 digits.');
+  const row = await ownerRow();
+  if (!row || row.status !== 'active') throw new Error('Owner account is unavailable.');
+  if (await hashCredential(row.username, currentPin) !== row.password_hash) throw new Error('Current PIN is incorrect.');
+  const nextHash = await hashCredential(row.username, nextPin);
+  await runInTransaction(async (db) => {
+    const now = nowIso();
+    await db.runAsync('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?', nextHash, now, row.id);
+    await db.runAsync("INSERT INTO settings (key, value, updated_at) VALUES ('owner_pin_needs_change', '0', ?) ON CONFLICT(key) DO UPDATE SET value = '0', updated_at = excluded.updated_at", now);
+  });
+}

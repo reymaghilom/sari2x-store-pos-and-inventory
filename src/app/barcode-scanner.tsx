@@ -1,14 +1,19 @@
+import { createThemedStyles, useAppearance } from '@/store/appearance';
 import { PrimaryButton, SecondaryButton, StatusBadge } from '@/components/ui';
-import { colors, radius, shadow, spacing, typography } from '@/constants/theme';
+import { ProductImage } from '@/components/ProductImage';
+import { radius, shadow, spacing, typography } from '@/constants/theme';
 import { useRole } from '@/hooks/useRole';
+import { defaultScannerPreferences, getScannerPreferences, ScannerPreferences } from '@/services/appSettings';
+import { getScanSoundUri } from '@/services/scanFeedback';
 import { useAppStore } from '@/store/app';
 import { Product } from '@/types';
 import { peso } from '@/utils/format';
 import { Ionicons } from '@expo/vector-icons';
 import { BarcodeScanningResult, BarcodeType, CameraView, useCameraPermissions } from 'expo-camera';
+import { useAudioPlayer } from 'expo-audio';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, Vibration, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type ScannerMode = 'pos' | 'inventory' | 'input';
@@ -24,6 +29,8 @@ function scannerMode(value?: string): ScannerMode {
 }
 
 export default function BarcodeScanner() {
+  const { colors } = useAppearance();
+  const styles = useStyles();
   const { mode: modeParam } = useLocalSearchParams<{ mode?: string }>();
   const mode = scannerMode(modeParam);
   const { cart, addToCart, findProductByBarcode, setPendingScannedBarcode } = useAppStore();
@@ -42,15 +49,33 @@ export default function BarcodeScanner() {
   const requestedAutomatically = useRef(false);
   const scanLocked = useRef(false);
   const lookupToken = useRef(0);
+  const preferencesRef = useRef<ScannerPreferences>(defaultScannerPreferences);
+  const soundUri = useMemo(getScanSoundUri, []);
+  const scanSound = useAudioPlayer(soundUri);
 
   useFocusEffect(useCallback(() => {
+    let active = true;
     setIsFocused(true);
+    void getScannerPreferences().then((preferences) => {
+      if (!active) return;
+      preferencesRef.current = preferences;
+      setTorch(preferences.torchDefault);
+    });
     return () => {
+      active = false;
       setIsFocused(false);
       setTorch(false);
       lookupToken.current += 1;
     };
   }, []));
+
+  const playScanFeedback = useCallback(() => {
+    const preferences = preferencesRef.current;
+    if (preferences.vibrate) Vibration.vibrate(45);
+    if (preferences.sound && soundUri) {
+      void scanSound.seekTo(0).then(() => scanSound.play()).catch(() => undefined);
+    }
+  }, [scanSound, soundUri]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -84,7 +109,7 @@ export default function BarcodeScanner() {
     setProduct(null);
     setScannedBarcode('');
     setQuantity(1);
-    setTorch(false);
+    setTorch(preferencesRef.current.torchDefault);
     setCameraReady(false);
     setCameraError('');
   }, []);
@@ -100,6 +125,7 @@ export default function BarcodeScanner() {
       return;
     }
 
+    playScanFeedback();
     setScannedBarcode(barcode);
     if (mode === 'input') {
       setPendingScannedBarcode(barcode);
@@ -120,6 +146,14 @@ export default function BarcodeScanner() {
         router.replace({ pathname: '/product-details', params: { id: match.id } });
         return;
       }
+      const quantityAlreadyInCart = cart.find((item) => item.productId === match.id)?.quantity ?? 0;
+      if (preferencesRef.current.autoAdd && match.stock > quantityAlreadyInCart) {
+        addToCart(match.id, 1);
+        setProduct(match);
+        setQuantity(1);
+        setState('added');
+        return;
+      }
       setProduct(match);
       setQuantity(1);
       setState('found');
@@ -128,7 +162,7 @@ export default function BarcodeScanner() {
       setCameraError('The local product database could not be searched. Please try again.');
       setState('error');
     }
-  }, [findProductByBarcode, mode, setPendingScannedBarcode]);
+  }, [addToCart, cart, findProductByBarcode, mode, playScanFeedback, setPendingScannedBarcode]);
 
   if (!permission) {
     return <CenteredMessage icon="camera-outline" title="Preparing camera" message="Checking camera permission…" loading />;
@@ -230,7 +264,7 @@ export default function BarcodeScanner() {
       <ScrollView contentContainerStyle={styles.resultPage}>
         <View style={styles.productCard}>
           <View style={styles.resultTop}>
-            <Text style={styles.emoji}>{product.icon}</Text>
+            <ProductImage uri={product.imageUri} fallback={product.icon} size={86} />
             <View style={styles.productHeading}>
               <StatusBadge label={product.stock > 0 ? 'Product Found' : 'Out of Stock'} tone={product.stock > 0 ? 'success' : 'danger'} />
               <Text style={styles.name}>{product.name}</Text>
@@ -281,6 +315,8 @@ export default function BarcodeScanner() {
 }
 
 function CenteredMessage({ children, error, icon, loading, message, title }: { children?: React.ReactNode; error?: string; icon: keyof typeof Ionicons.glyphMap; loading?: boolean; message: string; title: string }) {
+  const { colors } = useAppearance();
+  const styles = useStyles();
   return (
     <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.messageSafe}>
       <View style={styles.messageCard}>
@@ -294,11 +330,11 @@ function CenteredMessage({ children, error, icon, loading, message, title }: { c
   );
 }
 
-function Detail({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+function Detail({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {  const styles = useStyles();
   return <View style={[styles.detail, wide && styles.detailWide]}><Text style={styles.fieldLabel}>{label}</Text><Text selectable={label === 'Barcode'} style={styles.detailValue}>{value}</Text></View>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((colors) => ({
   scannerPage: { flex: 1, backgroundColor: '#05070B' },
   cameraStage: { flex: 1, backgroundColor: '#05070B', overflow: 'hidden' },
   pausedCamera: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
@@ -331,7 +367,6 @@ const styles = StyleSheet.create({
   resultPage: { padding: spacing.lg, paddingBottom: spacing.xxxl, gap: spacing.md },
   productCard: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, gap: spacing.lg, ...shadow },
   resultTop: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
-  emoji: { fontSize: 62 },
   productHeading: { flex: 1, alignItems: 'flex-start' },
   name: { color: colors.text, fontWeight: typography.bold, fontSize: typography.title, marginTop: spacing.sm },
   category: { color: colors.textMuted, marginTop: spacing.xs },
@@ -346,4 +381,4 @@ const styles = StyleSheet.create({
   stockWarning: { color: colors.danger, backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: spacing.md, textAlign: 'center' },
   confirmation: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, backgroundColor: colors.successSoft, borderRadius: radius.md, padding: spacing.md },
   confirmationText: { color: colors.success, fontWeight: typography.semibold },
-});
+}));

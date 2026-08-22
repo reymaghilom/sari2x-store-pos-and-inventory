@@ -1,20 +1,25 @@
+import { createThemedStyles, useAppearance } from '@/store/appearance';
 import { PrimaryButton, ScreenContainer, SecondaryButton, StatusBadge } from '@/components/ui';
-import { colors, radius, spacing, typography } from '@/constants/theme';
+import { radius, spacing, typography } from '@/constants/theme';
 import { getSaleReceipt } from '@/database/repositories/receipts';
+import { BluetoothPrinterError, printReceiptToBluetooth } from '@/services/bluetoothPrinter';
 import { printReceipt, ReceiptActionError, shareReceiptPdf } from '@/services/receipt';
 import { SaleReceipt } from '@/types';
 import { peso } from '@/utils/format';
+import { formatStoredDate } from '@/utils/date';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Text, View } from 'react-native';
 
 export default function ReceiptScreen() {
+  const { colors } = useAppearance();
+  const styles = useStyles();
   const { saleId } = useLocalSearchParams<{ saleId?: string }>();
   const [receipt, setReceipt] = useState<SaleReceipt | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [action, setAction] = useState<'print' | 'share' | null>(null);
+  const [action, setAction] = useState<'print' | 'share' | 'bluetooth' | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -56,6 +61,18 @@ export default function ReceiptScreen() {
     }
   };
 
+  const runBluetoothPrint = async () => {
+    if (!receipt || action) return;
+    setAction('bluetooth');
+    try {
+      await printReceiptToBluetooth(receipt);
+      Alert.alert('Receipt sent', 'The receipt was sent to the Bluetooth printer.');
+    } catch (printError) {
+      const setup = printError instanceof BluetoothPrinterError && (printError.code === 'NOT_CONFIGURED' || printError.code === 'UNAVAILABLE');
+      Alert.alert('Bluetooth printing unavailable', printError instanceof Error ? printError.message : 'The receipt could not be printed.', setup ? [{ text: 'Cancel', style: 'cancel' }, { text: 'Printer Setup', onPress: () => router.push('/printer-setup') }] : undefined);
+    } finally { setAction(null); }
+  };
+
   if (loading) return <ScreenContainer scroll={false} style={styles.state}><ActivityIndicator size="large" color={colors.primary} /><Text style={styles.stateText}>Loading receipt from this device…</Text></ScreenContainer>;
   if (!receipt || error) return <ScreenContainer scroll={false} style={styles.state}><Ionicons name="receipt-outline" size={64} color={colors.textMuted} /><Text style={styles.stateTitle}>Receipt unavailable</Text><Text style={styles.stateText}>{error}</Text><PrimaryButton title="Go Back" onPress={() => router.back()} style={styles.stateButton} /></ScreenContainer>;
 
@@ -69,7 +86,8 @@ export default function ReceiptScreen() {
       <Text style={styles.store}>{receipt.storeName}</Text>
       {receipt.storeAddress ? <Text style={styles.centerMuted}>{receipt.storeAddress}</Text> : null}
       {receipt.storePhone ? <Text style={styles.centerMuted}>{receipt.storePhone}</Text> : null}
-      <StatusBadge label={receipt.status} tone={receipt.status === 'Completed' ? 'success' : 'warning'} />
+      <StatusBadge label={receipt.status.toUpperCase()} tone={receipt.status === 'Completed' ? 'success' : receipt.status === 'Held' ? 'warning' : 'danger'} />
+      {receipt.status !== 'Completed' && receipt.status !== 'Held' ? <View style={styles.reversal}><Text style={styles.reversalTitle}>{receipt.status.toUpperCase()}</Text>{receipt.refundAmount !== undefined ? <Text style={styles.reversalText}>Refund amount: {peso(receipt.refundAmount)} · {receipt.refundMethod}</Text> : null}<Text style={styles.reversalText}>Reason: {receipt.reversalReason}</Text><Text style={styles.reversalText}>By {receipt.reversedBy} · {receipt.reversedAt ? new Date(receipt.reversedAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : ''}</Text></View> : null}
       <Divider />
       <ReceiptLine label="Transaction" value={receipt.transactionNumber} />
       <ReceiptLine label="Date" value={date} />
@@ -88,7 +106,7 @@ export default function ReceiptScreen() {
       <ReceiptLine label="Payment" value={receipt.paymentMethod} />
       {receipt.paymentMethod === 'Cash' ? <><ReceiptLine label="Cash Received" value={peso(receipt.cashReceived ?? receipt.total)} /><ReceiptLine label="Change" value={peso(receipt.change ?? 0)} /></> : null}
       {(receipt.paymentMethod === 'GCash' || receipt.paymentMethod === 'Maya') && receipt.reference ? <ReceiptLine label="Reference" value={receipt.reference} /> : null}
-      {receipt.paymentMethod === 'Utang' ? <><ReceiptLine label="Amount Charged" value={peso(receipt.total)} /><ReceiptLine label="Due Date" value={receipt.dueDate ? new Date(receipt.dueDate).toLocaleDateString('en-PH', { dateStyle: 'medium' }) : 'Not set'} /></> : null}
+      {receipt.paymentMethod === 'Utang' ? <><ReceiptLine label="Amount Charged" value={peso(receipt.total)} /><ReceiptLine label="Due Date" value={formatStoredDate(receipt.dueDate) || 'Not set'} />{receipt.notes ? <ReceiptLine label="Notes" value={receipt.notes} /> : null}</> : null}
       <Divider />
       <Text style={styles.thanks}>Thank you!</Text>
       <Text style={styles.centerMuted}>Please come again.</Text>
@@ -97,16 +115,17 @@ export default function ReceiptScreen() {
       <PrimaryButton title={action === 'print' ? 'Opening Print…' : 'Print Receipt'} icon="print-outline" loading={action === 'print'} onPress={() => void runAction('print')} style={styles.actionButton} />
       <SecondaryButton title={action === 'share' ? 'Preparing PDF…' : 'Share Receipt'} icon="share-outline" onPress={() => void runAction('share')} style={styles.actionButton} />
     </View>
+    <SecondaryButton title={action === 'bluetooth' ? 'Sending to Printer…' : 'Print to Bluetooth Printer'} icon="bluetooth-outline" onPress={() => void runBluetoothPrint()} />
   </ScreenContainer>;
 }
 
-function ReceiptLine({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function ReceiptLine({ label, value, strong }: { label: string; value: string; strong?: boolean }) {  const styles = useStyles();
   return <View style={styles.line}><Text style={[styles.label, strong && styles.total]}>{label}</Text><Text selectable style={[styles.value, strong && styles.total]}>{value}</Text></View>;
 }
 
-function Divider() { return <View style={styles.divider} />; }
+function Divider() {  const styles = useStyles(); return <View style={styles.divider} />; }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((colors) => ({
   paper: { alignItems: 'center', gap: spacing.sm, padding: spacing.xl, backgroundColor: colors.surface, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border },
   store: { color: colors.text, fontSize: typography.title, fontWeight: typography.bold, textAlign: 'center' },
   centerMuted: { color: colors.textMuted, fontSize: typography.bodySmall, textAlign: 'center' },
@@ -126,4 +145,7 @@ const styles = StyleSheet.create({
   stateTitle: { color: colors.text, fontSize: typography.title, fontWeight: typography.bold, textAlign: 'center' },
   stateText: { color: colors.textMuted, textAlign: 'center' },
   stateButton: { alignSelf: 'stretch', marginTop: spacing.md },
-});
+  reversal: { alignSelf: 'stretch', alignItems: 'center', gap: spacing.xs, padding: spacing.md, backgroundColor: colors.dangerSoft, borderRadius: radius.md },
+  reversalTitle: { color: colors.danger, fontSize: typography.title, fontWeight: typography.bold },
+  reversalText: { color: colors.danger, fontSize: typography.bodySmall, textAlign: 'center' },
+}));

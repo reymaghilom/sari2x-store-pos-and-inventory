@@ -1,5 +1,5 @@
 export const DATABASE_NAME = 'sari-sari-store.db';
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 export const migrationV1 = `
 CREATE TABLE IF NOT EXISTS users (
@@ -180,4 +180,153 @@ CREATE INDEX IF NOT EXISTS idx_sales_updated ON sales(updated_at);
 CREATE INDEX IF NOT EXISTS idx_sale_items_updated ON sale_items(updated_at);
 CREATE INDEX IF NOT EXISTS idx_credit_updated ON credit_transactions(updated_at);
 CREATE INDEX IF NOT EXISTS idx_payments_updated ON credit_payments(updated_at);
+`;
+
+// legacy_alter_table is enabled by the migration runner so child foreign keys keep
+// pointing at the replacement tables while SQLite constraints are expanded.
+export const migrationV3 = `
+ALTER TABLE sales RENAME TO sales_v2;
+CREATE TABLE sales (
+  id TEXT PRIMARY KEY NOT NULL,
+  transaction_number TEXT NOT NULL UNIQUE,
+  customer_id TEXT,
+  cashier_id TEXT NOT NULL,
+  payment_method TEXT NOT NULL CHECK (payment_method IN ('Cash', 'GCash', 'Maya', 'Utang')),
+  subtotal REAL NOT NULL,
+  discount REAL NOT NULL DEFAULT 0,
+  total REAL NOT NULL,
+  cash_received REAL,
+  change_amount REAL,
+  reference_number TEXT,
+  status TEXT NOT NULL CHECK (status IN ('completed', 'held', 'voided', 'refunded', 'partially_refunded', 'cancelled')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT,
+  deleted_at TEXT,
+  origin_device_id TEXT,
+  FOREIGN KEY (customer_id) REFERENCES customers(id),
+  FOREIGN KEY (cashier_id) REFERENCES users(id)
+);
+INSERT INTO sales SELECT * FROM sales_v2;
+DROP TABLE sales_v2;
+
+ALTER TABLE stock_movements RENAME TO stock_movements_v2;
+CREATE TABLE stock_movements (
+  id TEXT PRIMARY KEY NOT NULL,
+  product_id TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('stock_in', 'sale', 'damaged', 'expired', 'personal_use', 'correction', 'stock_out', 'void_return', 'refund_return')),
+  quantity INTEGER NOT NULL CHECK (quantity > 0),
+  reason TEXT,
+  reference TEXT,
+  notes TEXT,
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT,
+  deleted_at TEXT,
+  origin_device_id TEXT,
+  FOREIGN KEY (product_id) REFERENCES products(id),
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+INSERT INTO stock_movements SELECT * FROM stock_movements_v2;
+DROP TABLE stock_movements_v2;
+
+CREATE TABLE sale_voids (
+  id TEXT PRIMARY KEY NOT NULL,
+  sale_id TEXT NOT NULL UNIQUE,
+  amount REAL NOT NULL CHECK (amount >= 0),
+  reason TEXT NOT NULL CHECK (length(trim(reason)) > 0),
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  origin_device_id TEXT,
+  FOREIGN KEY (sale_id) REFERENCES sales(id),
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+CREATE TABLE sale_refunds (
+  id TEXT PRIMARY KEY NOT NULL,
+  sale_id TEXT NOT NULL UNIQUE,
+  refund_number TEXT NOT NULL UNIQUE,
+  amount REAL NOT NULL CHECK (amount > 0),
+  refund_method TEXT NOT NULL CHECK (refund_method IN ('Cash', 'GCash', 'Maya', 'Credit reversal')),
+  reason TEXT NOT NULL CHECK (length(trim(reason)) > 0),
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  origin_device_id TEXT,
+  FOREIGN KEY (sale_id) REFERENCES sales(id),
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+CREATE TABLE sale_refund_items (
+  id TEXT PRIMARY KEY NOT NULL,
+  refund_id TEXT NOT NULL,
+  sale_item_id TEXT NOT NULL UNIQUE,
+  product_id TEXT NOT NULL,
+  quantity INTEGER NOT NULL CHECK (quantity > 0),
+  unit_price REAL NOT NULL,
+  subtotal REAL NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  origin_device_id TEXT,
+  FOREIGN KEY (refund_id) REFERENCES sale_refunds(id),
+  FOREIGN KEY (sale_item_id) REFERENCES sale_items(id),
+  FOREIGN KEY (product_id) REFERENCES products(id)
+);
+CREATE INDEX idx_sales_created ON sales(created_at);
+CREATE INDEX idx_sales_updated ON sales(updated_at);
+CREATE INDEX idx_stock_product ON stock_movements(product_id, created_at);
+CREATE INDEX idx_stock_updated ON stock_movements(updated_at);
+CREATE INDEX idx_voids_sale ON sale_voids(sale_id);
+CREATE INDEX idx_voids_updated ON sale_voids(updated_at);
+CREATE INDEX idx_refunds_sale ON sale_refunds(sale_id);
+CREATE INDEX idx_refunds_updated ON sale_refunds(updated_at);
+CREATE INDEX idx_refund_items_refund ON sale_refund_items(refund_id);
+CREATE INDEX idx_refund_items_updated ON sale_refund_items(updated_at);
+`;
+
+// Authentication settings are device-local because credential hashes never
+// leave SQLite. Existing user rows remain untouched for historical receipts.
+export const migrationV4 = `
+INSERT OR IGNORE INTO settings (key, value, updated_at)
+VALUES ('security_lock_timeout_ms', '300000', datetime('now'));
+`;
+
+// Pending carts and device preferences remain local to this single-phone app.
+// Saving a cart never writes stock movements or changes cached inventory.
+export const migrationV5 = `
+CREATE TABLE pending_sales (
+  id TEXT PRIMARY KEY NOT NULL,
+  customer_id TEXT,
+  discount REAL NOT NULL DEFAULT 0 CHECK (discount >= 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (customer_id) REFERENCES customers(id)
+);
+CREATE TABLE pending_sale_items (
+  id TEXT PRIMARY KEY NOT NULL,
+  pending_sale_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  quantity INTEGER NOT NULL CHECK (quantity > 0),
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (pending_sale_id) REFERENCES pending_sales(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_id) REFERENCES products(id)
+);
+CREATE INDEX idx_pending_sales_created ON pending_sales(created_at DESC);
+CREATE INDEX idx_pending_items_sale ON pending_sale_items(pending_sale_id);
+
+INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('store_name', 'Sari-sari Store', datetime('now'));
+INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('owner_name', 'Owner', datetime('now'));
+INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('store_address', '', datetime('now'));
+INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('store_phone', '', datetime('now'));
+INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('payment_methods', '{"Cash":true,"GCash":true,"Maya":true,"Utang":true}', datetime('now'));
+INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('scanner_preferences', '{"sound":true,"vibrate":true,"torchDefault":false,"autoAdd":false}', datetime('now'));
+INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('appearance_preference', 'system', datetime('now'));
+`;
+
+// Payment allocation, customer credit details, and Utang reversal validation
+// all join payments through credit_transaction_id.
+export const migrationV6 = `
+CREATE INDEX IF NOT EXISTS idx_payments_credit
+ON credit_payments(credit_transaction_id, deleted_at);
 `;

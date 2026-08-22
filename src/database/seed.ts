@@ -1,30 +1,38 @@
 import { hashCredential } from '@/database/credentials';
 import { createId, nowIso } from '@/database/ids';
+import { queueSync } from '@/database/syncQueue';
 import { initialCredits, initialCustomers, products, transactions } from '@/services/mockData';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const seedUsers = [
-  { id: 'seed-admin', name: 'Admin', username: 'admin', password: 'admin123', role: 'admin' },
-  { id: 'seed-tindera-1', name: 'Tindera 1', username: 'tindera1', password: '1234', role: 'staff' },
-  { id: 'seed-tindera-2', name: 'Tindera 2', username: 'tindera2', password: '1234', role: 'staff' },
-] as const;
+const TEMPORARY_OWNER_PIN = '1234';
 
 export async function seedDatabase(db: SQLiteDatabase) {
-  const developmentSeedEnabled = __DEV__ && process.env.EXPO_PUBLIC_ENABLE_DEVELOPMENT_SEED !== 'false';
-  const userCount = (await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM users'))?.count ?? 0;
+  const resetCompleted = (await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'store_reset_completed'"))?.value === '1';
+  const developmentSeedEnabled = __DEV__ && process.env.EXPO_PUBLIC_ENABLE_DEVELOPMENT_SEED !== 'false' && !resetCompleted;
   const productCount = (await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM products'))?.count ?? 0;
   const customerCount = (await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM customers'))?.count ?? 0;
   const salesCount = (await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM sales'))?.count ?? 0;
-  const credentialHashes = await Promise.all(seedUsers.map((user) => hashCredential(user.username, user.password)));
+  const existingOwnerId = (await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'owner_user_id'"))?.value;
+  const existingOwner = existingOwnerId
+    ? await db.getFirstAsync<{ id: string }>('SELECT id FROM users WHERE id = ? AND deleted_at IS NULL', existingOwnerId)
+    : null;
+  const ownerId = existingOwner?.id ?? createId();
+  const ownerUsername = existingOwner
+    ? (await db.getFirstAsync<{ username: string }>('SELECT username FROM users WHERE id = ?', ownerId))?.username ?? 'owner'
+    : (await db.getFirstAsync<{ id: string }>("SELECT id FROM users WHERE username = 'owner' COLLATE NOCASE AND deleted_at IS NULL"))
+      ? `local-owner-${ownerId.slice(0, 8)}`
+      : 'owner';
+  const ownerHash = await hashCredential(ownerUsername, TEMPORARY_OWNER_PIN);
   const now = nowIso();
   await db.withTransactionAsync(async () => {
-    if (!userCount) {
-      for (let index = 0; index < seedUsers.length; index += 1) {
-        const user = seedUsers[index];
-        await db.runAsync('INSERT OR IGNORE INTO users (id, name, username, password_hash, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', user.id, user.name, user.username, credentialHashes[index], user.role, 'active', now, now);
-      }
+    if (!existingOwner) {
+      await db.runAsync('INSERT INTO users (id, name, username, password_hash, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', ownerId, 'Owner', ownerUsername, ownerHash, 'admin', 'active', now, now);
+      await queueSync(db, 'users', ownerId, 'create', { id: ownerId, name: 'Owner', username: ownerUsername, role: 'admin', status: 'active' });
+      await db.runAsync("INSERT INTO settings (key, value, updated_at) VALUES ('owner_pin_needs_change', '1', ?) ON CONFLICT(key) DO UPDATE SET value = '1', updated_at = excluded.updated_at", now);
     }
-    const primaryUser = await db.getFirstAsync<{ id: string }>("SELECT id FROM users ORDER BY CASE role WHEN 'admin' THEN 0 ELSE 1 END, created_at LIMIT 1");
+    await db.runAsync("INSERT INTO settings (key, value, updated_at) VALUES ('owner_user_id', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at", ownerId, now);
+    await db.runAsync("INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('security_lock_timeout_ms', '300000', ?)", now);
+    const primaryUser = { id: ownerId };
     if (developmentSeedEnabled && !productCount) {
       const categories = Array.from(new Set(products.map((product) => product.category)));
       for (const name of categories) await db.runAsync('INSERT OR IGNORE INTO categories (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)', `seed-category-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, name, now, now);
@@ -48,7 +56,7 @@ export async function seedDatabase(db: SQLiteDatabase) {
       const seedProduct = await db.getFirstAsync<{ id: string; name: string; cost_price: number }>('SELECT id, name, cost_price FROM products WHERE is_active = 1 ORDER BY created_at LIMIT 1');
       if (!seedProduct) throw new Error('Seed sales require at least one product.');
       for (let index = 0; index < transactions.length; index += 1) {
-        const transaction = transactions[index]; const saleId = createId(); const cashierUsername = transaction.cashier === 'Admin' ? 'admin' : transaction.cashier === 'Tindera 2' ? 'tindera2' : 'tindera1'; const cashier = await db.getFirstAsync<{ id: string }>('SELECT id FROM users WHERE username = ? COLLATE NOCASE', cashierUsername); const cashierId = cashier?.id ?? primaryUser?.id; if (!cashierId) throw new Error('Seed requires at least one local user.'); const createdAt = new Date(Date.now() - index * 3_600_000).toISOString();
+        const transaction = transactions[index]; const saleId = createId(); const cashierId = primaryUser.id; const createdAt = new Date(Date.now() - index * 3_600_000).toISOString();
         await db.runAsync('INSERT INTO sales (id, transaction_number, customer_id, cashier_id, payment_method, subtotal, discount, total, cash_received, change_amount, reference_number, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)', saleId, transaction.id, null, cashierId, 'Cash', transaction.amount, transaction.amount, transaction.amount, 0, 'SEED', transaction.status === 'Completed' ? 'completed' : 'held', createdAt);
         await db.runAsync('INSERT INTO sale_items (id, sale_id, product_id, product_name_snapshot, quantity, unit_price, cost_price, subtotal, created_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)', createId(), saleId, seedProduct.id, seedProduct.name, transaction.amount, seedProduct.cost_price, transaction.amount, createdAt);
       }

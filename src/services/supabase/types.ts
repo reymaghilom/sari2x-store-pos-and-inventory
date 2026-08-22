@@ -8,6 +8,7 @@ export type SyncDiagnostics = {
   lastSuccessfulSync: string | null;
   pendingCount: number;
   failedCount: number;
+  restoreNeedsCloudReconciliation: boolean;
   message: string;
 };
 

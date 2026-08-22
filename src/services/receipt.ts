@@ -1,4 +1,6 @@
 import { SaleReceipt } from '@/types';
+import { formatStoredDate } from '@/utils/date';
+import { peso as currency } from '@/utils/format';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
@@ -10,8 +12,6 @@ const escapeHtml = (value: string) => value
   .replaceAll('>', '&gt;')
   .replaceAll('"', '&quot;')
   .replaceAll("'", '&#039;');
-
-const currency = (value: number) => `₱${value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 function formatReceiptDate(value: string) {
   const date = new Date(value);
@@ -29,9 +29,10 @@ function paymentDetails(receipt: SaleReceipt) {
       ? `<div class="row"><span>Reference</span><strong>${escapeHtml(receipt.reference)}</strong></div>`
       : '';
   }
-  const due = receipt.dueDate ? formatReceiptDate(receipt.dueDate) : 'Not set';
+  const due = formatStoredDate(receipt.dueDate) || 'Not set';
   return `<div class="row"><span>Amount charged</span><strong>${currency(receipt.total)}</strong></div>
-    <div class="row"><span>Due date</span><strong>${escapeHtml(due)}</strong></div>`;
+    <div class="row"><span>Due date</span><strong>${escapeHtml(due)}</strong></div>
+    ${receipt.notes ? `<div class="row"><span>Notes</span><strong>${escapeHtml(receipt.notes)}</strong></div>` : ''}`;
 }
 
 export function buildReceiptHtml(receipt: SaleReceipt) {
@@ -41,6 +42,7 @@ export function buildReceiptHtml(receipt: SaleReceipt) {
     </div>`).join('');
   const address = receipt.storeAddress ? `<div>${escapeHtml(receipt.storeAddress)}</div>` : '';
   const phone = receipt.storePhone ? `<div>${escapeHtml(receipt.storePhone)}</div>` : '';
+  const reversed = receipt.status !== 'Completed' && receipt.status !== 'Held' ? `<section class="reversal"><strong>${escapeHtml(receipt.status.toUpperCase())}</strong>${receipt.refundAmount !== undefined ? `<div>Refund: ${currency(receipt.refundAmount)} · ${escapeHtml(receipt.refundMethod ?? '')}</div>` : ''}<div>${escapeHtml(receipt.reversalReason ?? '')}</div><div>${escapeHtml(receipt.reversedBy ?? '')} · ${escapeHtml(receipt.reversedAt ? formatReceiptDate(receipt.reversedAt) : '')}</div></section>` : '';
 
   return `<!doctype html>
 <html lang="en">
@@ -62,6 +64,7 @@ export function buildReceiptHtml(receipt: SaleReceipt) {
     .item-name { font-weight: 700; }
     .total { font-size: 13px; }
     .footer { margin-top: 12px; text-align: center; }
+    .reversal { margin: 8px 0; padding: 8px; border: 2px solid #a00; color: #a00; text-align: center; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -70,6 +73,7 @@ export function buildReceiptHtml(receipt: SaleReceipt) {
       <h1 class="store">${escapeHtml(receipt.storeName)}</h1>
       ${address}${phone}
     </header>
+    ${reversed}
     <div class="divider"></div>
     <div class="row"><span>Transaction</span><strong>${escapeHtml(receipt.transactionNumber)}</strong></div>
     <div class="row"><span>Date / time</span><strong>${escapeHtml(formatReceiptDate(receipt.createdAt))}</strong></div>

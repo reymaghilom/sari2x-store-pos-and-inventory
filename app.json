@@ -6,11 +6,16 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "sarisaristore",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.rey.sarisaristore",
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "android.permission.BLUETOOTH_CONNECT"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -31,6 +36,8 @@
     },
     "plugins": [
       "expo-router",
+      "expo-dev-client",
+      "./plugins/with-app-theme",
       [
         "expo-splash-screen",
         {
@@ -48,6 +55,13 @@
         }
       ],
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Sari-sari Store to select product images from your photo library.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-navigation-bar",
         {
           "visibility": "hidden",
@@ -55,7 +69,16 @@
           "position": "relative",
           "legacyVisible": "sticky-immersive"
         }
-      ]
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

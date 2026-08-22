@@ -1,4 +1,27 @@
-import { FormField } from '@/components/FormField'; import { PrimaryButton, ScreenContainer } from '@/components/ui'; import { colors, radius, spacing, typography } from '@/constants/theme'; import { useAppStore } from '@/store/app'; import { useAuth } from '@/store/auth'; import { peso } from '@/utils/format'; import { router, useLocalSearchParams } from 'expo-router'; import { useState } from 'react'; import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-export default function NewUtang() { const { id } = useLocalSearchParams<{ id?: string }>(); const { customers, addUtang } = useAppStore(); const { user } = useAuth(); const customer = customers.find((item) => item.id === id); const [description, setDescription] = useState(''); const [amount, setAmount] = useState(''); const [dueDate, setDueDate] = useState(''); const [notes, setNotes] = useState(''); const [saving, setSaving] = useState(false); const save = async () => { const value = Number(amount); if (!customer || !description.trim() || value <= 0 || !dueDate.trim()) { Alert.alert('Incomplete details', 'Select a customer and complete description, amount, and due date.'); return; } if (customer.utang + value > customer.creditLimit) { Alert.alert('Credit limit exceeded', `${customer.name} has ${peso(customer.creditLimit - customer.utang)} available credit.`); return; } setSaving(true); try { await addUtang(customer.id, { description: description.trim(), amount: value, dueDate: dueDate.trim(), notes, createdBy: user?.id }); Alert.alert('Utang saved', 'The customer balance was saved offline.', [{ text: 'View details', onPress: () => router.replace({ pathname: '/customer-utang-details', params: { id: customer.id } }) }]); } catch { Alert.alert('Unable to save Utang', 'No changes were made. Please check the details and try again.'); } finally { setSaving(false); } };
-  return <ScreenContainer>{customer ? <View style={styles.customer}><Text style={styles.label}>Customer</Text><Text style={styles.name}>{customer.name}</Text><Text style={styles.available}>Available credit: {peso(customer.creditLimit - customer.utang)}</Text></View> : <Pressable style={styles.select} onPress={() => router.push({ pathname: '/customers', params: { select: 'new-utang' } })}><Text style={styles.selectText}>Select Customer *</Text></Pressable>}<FormField label="Items / Description *" placeholder="What was purchased?" value={description} onChangeText={setDescription} /><FormField label="Amount *" placeholder="0.00" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} /><FormField label="Due Date *" placeholder="e.g. Aug 30, 2026" value={dueDate} onChangeText={setDueDate} /><FormField label="Notes" placeholder="Optional notes" multiline value={notes} onChangeText={setNotes} /><PrimaryButton title="Save Utang" icon="save-outline" onPress={() => void save()} loading={saving} /></ScreenContainer>; }
-const styles = StyleSheet.create({ customer: { backgroundColor: colors.primarySoft, borderRadius: radius.md, padding: spacing.lg }, label: { color: colors.textMuted, fontSize: typography.caption }, name: { color: colors.text, fontSize: typography.subtitle, fontWeight: typography.bold, marginTop: spacing.xs }, available: { color: colors.primary, fontSize: typography.bodySmall, marginTop: spacing.xs }, select: { minHeight: 52, borderRadius: radius.md, borderWidth: 1, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, selectText: { color: colors.primary, fontWeight: typography.semibold } });
+import { ScreenContainer } from '@/components/ui';
+import { useAppStore } from '@/store/app';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef } from 'react';
+import { ActivityIndicator, Text } from 'react-native';
+
+/** Existing links land here, but all new Utang is product-backed POS checkout. */
+export default function NewUtang() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { customers, beginUtangSale } = useAppStore();
+  const redirected = useRef(false);
+
+  useEffect(() => {
+    if (redirected.current) return;
+    if (!id) {
+      redirected.current = true;
+      router.replace({ pathname: '/customers', params: { select: 'new-utang' } });
+      return;
+    }
+    if (!customers.some((customer) => customer.id === id)) return;
+    redirected.current = true;
+    beginUtangSale(id);
+    router.replace('/(tabs)/pos');
+  }, [beginUtangSale, customers, id]);
+
+  return <ScreenContainer style={{ alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator /><Text>Opening product selection…</Text></ScreenContainer>;
+}
