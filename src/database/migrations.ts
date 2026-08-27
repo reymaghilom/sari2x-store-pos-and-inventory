@@ -1,4 +1,4 @@
-import { CURRENT_SCHEMA_VERSION, migrationV1, migrationV2, migrationV3, migrationV4, migrationV5, migrationV6 } from '@/database/schema';
+import { CURRENT_SCHEMA_VERSION, migrationV1, migrationV2, migrationV3, migrationV4, migrationV5, migrationV6, migrationV7, migrationV8 } from '@/database/schema';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 export async function runMigrations(db: SQLiteDatabase) {
@@ -50,6 +50,20 @@ export async function runMigrations(db: SQLiteDatabase) {
       await db.execAsync('PRAGMA user_version = 6');
     });
     version = 6;
+  }
+  if (version < 7) {
+    await db.withTransactionAsync(async () => {
+      await db.execAsync(migrationV7);
+      await db.execAsync('PRAGMA user_version = 7');
+    });
+    version = 7;
+  }
+  if (version < 8) {
+    await db.withTransactionAsync(async () => {
+      await db.execAsync(migrationV8);
+      await db.execAsync('PRAGMA user_version = 8');
+    });
+    version = 8;
   }
   if (version > CURRENT_SCHEMA_VERSION) throw new Error('Database schema is newer than this app version.');
 }

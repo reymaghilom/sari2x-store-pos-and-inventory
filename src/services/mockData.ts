@@ -13,11 +13,11 @@ export const transactions: Transaction[] = [
   { saleId: 'seed-sale-1002', id: '#TXN1002', time: 'Yesterday, 5:42 PM', amount: 340, cashier: 'Admin', paymentMethod: 'Cash', status: 'Held' },
 ];
 export const initialCustomers: Customer[] = [
-  { id: 'juan', name: 'Juan Dela Cruz', phone: '0917 123 4567', address: 'Purok 2, Barangay Mabini', creditLimit: 3000, utang: 1250, remainingCredit: 1750 },
-  { id: 'maria', name: 'Maria Santos', phone: '0918 555 0182', address: 'Rizal Street', creditLimit: 2000, utang: 750, remainingCredit: 1250 },
-  { id: 'pedro', name: 'Pedro Reyes', phone: '0920 312 9988', address: 'Market Road', creditLimit: 4000, utang: 2400, remainingCredit: 1600 },
-  { id: 'ana', name: 'Ana Lopez', phone: '0916 800 4402', creditLimit: 2500, utang: 1000, remainingCredit: 1500 },
-  { id: 'robert', name: 'Robert Garcia', phone: '0998 200 1234', creditLimit: 3500, utang: 0, remainingCredit: 3500 },
+  { id: 'juan', name: 'Juan Dela Cruz', phone: '0917 123 4567', address: 'Purok 2, Barangay Mabini', customerType: 'suki', discountType: 'percentage', discountValue: 5, allowUtang: true, creditLimit: 3000, utang: 1250, remainingCredit: 1750, overdue: true },
+  { id: 'maria', name: 'Maria Santos', phone: '0918 555 0182', address: 'Rizal Street', customerType: 'regular', discountType: 'none', discountValue: 0, allowUtang: true, creditLimit: 2000, utang: 750, remainingCredit: 1250, overdue: false },
+  { id: 'pedro', name: 'Pedro Reyes', phone: '0920 312 9988', address: 'Market Road', customerType: 'regular', discountType: 'none', discountValue: 0, allowUtang: true, creditLimit: 4000, utang: 2400, remainingCredit: 1600, overdue: true },
+  { id: 'ana', name: 'Ana Lopez', phone: '0916 800 4402', customerType: 'regular', discountType: 'none', discountValue: 0, allowUtang: true, creditLimit: 2500, utang: 1000, remainingCredit: 1500, overdue: false },
+  { id: 'robert', name: 'Robert Garcia', phone: '0998 200 1234', customerType: 'suki', discountType: 'fixed', discountValue: 20, allowUtang: true, creditLimit: 3500, utang: 0, remainingCredit: 3500, overdue: false },
 ];
 export const initialCredits: CreditRecord[] = [
   { id: 'credit-1', customerId: 'juan', date: 'Aug 10, 2026', dueDate: 'Aug 17, 2026', description: 'Store groceries', amount: 1750, remaining: 1250, status: 'Overdue' },

@@ -182,7 +182,6 @@ export default function BarcodeScanner() {
         {permanentlyDenied
           ? <PrimaryButton title="Open Android Settings" icon="settings-outline" onPress={() => void Linking.openSettings().catch(() => Alert.alert('Unable to open Settings', 'Open Android Settings and enable Camera permission for Sari-sari Store.'))} />
           : <PrimaryButton title="Retry Permission" icon="camera-outline" onPress={() => void retryPermission()} />}
-        <SecondaryButton title="Back" icon="arrow-back-outline" onPress={() => router.back()} />
       </CenteredMessage>
     );
   }
@@ -249,7 +248,6 @@ export default function BarcodeScanner() {
     return (
       <CenteredMessage icon="warning-outline" title="Scanner unavailable" message={cameraError || 'The barcode could not be processed.'}>
         <PrimaryButton title="Try Again" icon="scan-outline" onPress={resetScanner} />
-        <SecondaryButton title="Back" icon="arrow-back-outline" onPress={() => router.back()} />
       </CenteredMessage>
     );
   }

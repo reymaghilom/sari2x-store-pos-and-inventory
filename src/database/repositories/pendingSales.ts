@@ -40,7 +40,7 @@ export async function savePendingSale(items: CartItem[], customerId: string | nu
 
 export async function loadPendingSaleForResume(id: string) {
   const db = await getDatabase();
-  const sale = await db.getFirstAsync<{ customer_id: string | null }>('SELECT customer_id FROM pending_sales WHERE id = ?', id);
+  const sale = await db.getFirstAsync<{ customer_id: string | null; discount: number }>('SELECT customer_id, discount FROM pending_sales WHERE id = ?', id);
   if (!sale) throw new Error('This pending sale no longer exists.');
   const items = await db.getAllAsync<{ product_id: string; quantity: number; name: string | null; cached_stock: number | null }>(`SELECT psi.product_id, psi.quantity, p.name, p.cached_stock
     FROM pending_sale_items psi LEFT JOIN products p ON p.id = psi.product_id AND p.is_active = 1 AND p.deleted_at IS NULL
@@ -50,7 +50,7 @@ export async function loadPendingSaleForResume(id: string) {
     if (!item.name) throw new Error('A product in this pending sale is no longer available.');
     if ((item.cached_stock ?? 0) < item.quantity) throw new Error(`${item.name} now has only ${item.cached_stock ?? 0} in stock. Update the pending sale before checkout.`);
   }
-  return { customerId: sale.customer_id, items: items.map((item) => ({ productId: item.product_id, quantity: item.quantity })) };
+  return { customerId: sale.customer_id, discount: sale.discount, items: items.map((item) => ({ productId: item.product_id, quantity: item.quantity })) };
 }
 
 export async function deletePendingSale(id: string) {

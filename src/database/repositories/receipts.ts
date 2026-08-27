@@ -1,5 +1,5 @@
 import { getDatabase } from '@/database';
-import { PaymentMethod, SaleReceipt, SaleReceiptItem } from '@/types';
+import { DiscountType, PaymentMethod, SaleReceipt, SaleReceiptItem } from '@/types';
 
 type ReceiptRow = {
   id: string;
@@ -10,6 +10,8 @@ type ReceiptRow = {
   customer: string | null;
   payment_method: PaymentMethod;
   subtotal: number;
+  discount_type: DiscountType;
+  discount_value: number;
   discount: number;
   total: number;
   cash_received: number | null;
@@ -42,10 +44,12 @@ export async function getSaleReceipt(saleId: string): Promise<SaleReceipt | null
        s.transaction_number,
        s.created_at,
        s.status,
-       u.name AS cashier,
-       c.full_name AS customer,
+       COALESCE(NULLIF(s.cashier_name_snapshot, ''), u.name, 'Owner') AS cashier,
+       COALESCE(NULLIF(s.customer_name_snapshot, ''), c.full_name) AS customer,
        s.payment_method,
        s.subtotal,
+       s.discount_type,
+       s.discount_value,
        s.discount,
        s.total,
        s.cash_received,
@@ -109,10 +113,12 @@ export async function getSaleReceipt(saleId: string): Promise<SaleReceipt | null
     transactionNumber: sale.transaction_number,
     createdAt: sale.created_at,
     status: ({ completed: 'Completed', held: 'Held', voided: 'Voided', refunded: 'Refunded', partially_refunded: 'Partially Refunded', cancelled: 'Cancelled' } as const)[sale.status],
-    cashier: sale.cashier ?? 'Unknown cashier',
-    customer: sale.customer ?? 'Walk-in Customer',
+    cashier: sale.cashier ?? 'Owner',
+    customer: sale.customer ?? undefined,
     paymentMethod: sale.payment_method,
     subtotal: sale.subtotal,
+    discountType: sale.discount_type,
+    discountValue: sale.discount_value,
     discount: sale.discount,
     total: sale.total,
     cashReceived: sale.cash_received ?? undefined,

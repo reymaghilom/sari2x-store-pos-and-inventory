@@ -18,8 +18,8 @@ export default function UtangScreen() {
     const records = credits.filter((credit) => credit.customerId === customer.id);
     const latest = records[0];
     const state = customer.utang === 0 ? 'Paid' : records.some((credit) => credit.status === 'Overdue' && credit.remaining > 0) ? 'Overdue' : 'Due';
-    return { customer, date: latest?.date ?? 'No recent credit', state };
-  }).filter((row) => filter === 'All' || row.state === filter), [customers, credits, filter]);
+    return { customer, date: `${latest?.date ?? 'No recent credit'}${customer.allowUtang ? '' : ' · Utang disabled'}`, state, hasHistory: records.length > 0 };
+  }).filter((row) => (row.customer.allowUtang || row.hasHistory || row.customer.utang > 0) && (filter === 'All' || row.state === filter)), [customers, credits, filter]);
   const outstanding = customers.reduce((sum, customer) => sum + customer.utang, 0);
   const count = customers.filter((customer) => customer.utang > 0).length;
 

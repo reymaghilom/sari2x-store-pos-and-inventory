@@ -13,8 +13,8 @@ const allowed: Record<Table, Set<string>> = {
   categories: new Set(['id', 'name', ...common]),
   products: new Set(['id', 'name', 'category_id', 'selling_price', 'cost_price', 'barcode', 'low_stock_threshold', 'description', 'is_active', ...common]),
   stock_movements: new Set(['id', 'product_id', 'type', 'quantity', 'reason', 'reference', 'notes', 'created_by', ...common]),
-  customers: new Set(['id', 'full_name', 'phone', 'address', 'credit_limit', ...common]),
-  sales: new Set(['id', 'transaction_number', 'customer_id', 'cashier_id', 'payment_method', 'subtotal', 'discount', 'total', 'cash_received', 'change_amount', 'reference_number', 'status', ...common]),
+  customers: new Set(['id', 'full_name', 'phone', 'address', 'customer_type', 'discount_type', 'discount_value', 'allow_utang', 'credit_limit', ...common]),
+  sales: new Set(['id', 'transaction_number', 'customer_id', 'cashier_id', 'payment_method', 'subtotal', 'discount_type', 'discount_value', 'discount', 'total', 'cash_received', 'change_amount', 'reference_number', 'cashier_name_snapshot', 'customer_name_snapshot', 'status', ...common]),
   sale_items: new Set(['id', 'sale_id', 'product_id', 'product_name_snapshot', 'quantity', 'unit_price', 'cost_price', 'subtotal', ...common]),
   sale_voids: new Set(['id', 'sale_id', 'amount', 'reason', 'created_by', ...common]),
   sale_refunds: new Set(['id', 'sale_id', 'refund_number', 'amount', 'refund_method', 'reason', 'created_by', ...common]),
@@ -24,15 +24,15 @@ const allowed: Record<Table, Set<string>> = {
   settings: new Set(['key', 'value', 'updated_at', 'deleted_at', 'origin_device_id']),
 };
 const numeric: Partial<Record<Table, string[]>> = {
-  products: ['selling_price', 'cost_price', 'low_stock_threshold', 'is_active'], stock_movements: ['quantity'], customers: ['credit_limit'],
-  sales: ['subtotal', 'discount', 'total', 'cash_received', 'change_amount'], sale_items: ['quantity', 'unit_price', 'cost_price', 'subtotal'],
+  products: ['selling_price', 'cost_price', 'low_stock_threshold', 'is_active'], stock_movements: ['quantity'], customers: ['discount_value', 'allow_utang', 'credit_limit'],
+  sales: ['subtotal', 'discount_value', 'discount', 'total', 'cash_received', 'change_amount'], sale_items: ['quantity', 'unit_price', 'cost_price', 'subtotal'],
   sale_voids: ['amount'], sale_refunds: ['amount'], sale_refund_items: ['quantity', 'unit_price', 'subtotal'], credit_transactions: ['amount'], credit_payments: ['amount'],
 };
 const required: Record<Table, string[]> = {
   users: ['id', 'name', 'username', 'role', 'status', 'created_at', 'updated_at'], categories: ['id', 'name', 'created_at', 'updated_at'],
   products: ['id', 'name', 'selling_price', 'cost_price', 'low_stock_threshold', 'is_active', 'created_at', 'updated_at'],
-  stock_movements: ['id', 'product_id', 'type', 'quantity', 'created_at', 'updated_at'], customers: ['id', 'full_name', 'phone', 'credit_limit', 'created_at', 'updated_at'],
-  sales: ['id', 'transaction_number', 'cashier_id', 'payment_method', 'subtotal', 'discount', 'total', 'status', 'created_at', 'updated_at'],
+  stock_movements: ['id', 'product_id', 'type', 'quantity', 'created_at', 'updated_at'], customers: ['id', 'full_name', 'phone', 'customer_type', 'discount_type', 'discount_value', 'allow_utang', 'credit_limit', 'created_at', 'updated_at'],
+  sales: ['id', 'transaction_number', 'cashier_id', 'payment_method', 'subtotal', 'discount_type', 'discount_value', 'discount', 'total', 'cashier_name_snapshot', 'status', 'created_at', 'updated_at'],
   sale_items: ['id', 'sale_id', 'product_id', 'product_name_snapshot', 'quantity', 'unit_price', 'cost_price', 'subtotal', 'created_at', 'updated_at'],
   sale_voids: ['id', 'sale_id', 'amount', 'reason', 'created_by', 'created_at', 'updated_at'],
   sale_refunds: ['id', 'sale_id', 'refund_number', 'amount', 'refund_method', 'reason', 'created_by', 'created_at', 'updated_at'],
@@ -101,6 +101,16 @@ export function validateSnapshot(value: unknown): Snapshot {
       if (seen.has(key)) throw new StoreAdminValidationError(`${table} identifier is duplicated.`, 'snapshot-validation', 'Cloud backup contains duplicate records.', table, [table === 'settings' ? 'key' : 'id']);
       seen.add(key);
       for (const field of numeric[table] ?? []) if (row[field] !== null && row[field] !== undefined && (typeof row[field] !== 'number' || !Number.isFinite(row[field]))) throw new StoreAdminValidationError(`${table}.${field} must be numeric.`, 'snapshot-validation', 'Cloud backup contains an invalid number.', table, [field]);
+      if (table === 'customers') {
+        if (row.customer_type !== 'regular' && row.customer_type !== 'suki') throw new StoreAdminValidationError('customers.customer_type is invalid.', 'snapshot-validation', 'Cloud backup contains an invalid customer type.', table, ['customer_type']);
+        if (!['none', 'percentage', 'fixed'].includes(String(row.discount_type))) throw new StoreAdminValidationError('customers.discount_type is invalid.', 'snapshot-validation', 'Cloud backup contains an invalid customer discount.', table, ['discount_type']);
+        if ((row.discount_value as number) < 0 || (row.discount_type === 'percentage' && (row.discount_value as number) > 100)) throw new StoreAdminValidationError('customers.discount_value is out of range.', 'snapshot-validation', 'Cloud backup contains an invalid customer discount.', table, ['discount_value']);
+        if (row.allow_utang !== 0 && row.allow_utang !== 1) throw new StoreAdminValidationError('customers.allow_utang is invalid.', 'snapshot-validation', 'Cloud backup contains an invalid Allow Utang value.', table, ['allow_utang']);
+      }
+      if (table === 'sales') {
+        if (!['none', 'percentage', 'fixed'].includes(String(row.discount_type))) throw new StoreAdminValidationError('sales.discount_type is invalid.', 'snapshot-validation', 'Cloud backup contains an invalid sale discount snapshot.', table, ['discount_type']);
+        if ((row.discount_value as number) < 0 || (row.discount_type === 'percentage' && (row.discount_value as number) > 100)) throw new StoreAdminValidationError('sales.discount_value is out of range.', 'snapshot-validation', 'Cloud backup contains an invalid sale discount snapshot.', table, ['discount_value']);
+      }
       for (const field of ['created_at', 'updated_at']) if (row[field] !== undefined && (typeof row[field] !== 'string' || !Number.isFinite(Date.parse(row[field] as string)))) throw new StoreAdminValidationError(`${table}.${field} is not a valid date.`, 'snapshot-validation', 'Cloud backup contains an invalid date.', table, [field]);
     }
   }

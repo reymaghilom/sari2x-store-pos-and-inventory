@@ -1,4 +1,4 @@
-import { SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
 
 export type CustomerCreditSummary = {
   creditLimit: number;
@@ -12,6 +12,10 @@ export function getRemainingCredit(creditLimit: number, outstandingBalance: numb
 
 export function isCreditChargeAllowed(remainingCredit: number, chargeAmount: number) {
   return chargeAmount >= 0 && chargeAmount <= remainingCredit;
+}
+
+export function isUtangCheckoutAllowed(allowUtang: boolean, remainingCredit: number, chargeAmount: number) {
+  return allowUtang && isCreditChargeAllowed(remainingCredit, chargeAmount);
 }
 
 export function customerOutstandingBalanceSql(customerIdExpression: string) {

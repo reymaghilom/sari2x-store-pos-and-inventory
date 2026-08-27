@@ -5,12 +5,14 @@ export type SaleStatus = 'Completed' | 'Held' | 'Voided' | 'Refunded' | 'Partial
 export type Transaction = { saleId: string; id: string; time: string; amount: number; cashier: string; customer?: string; paymentMethod: PaymentMethod; status: SaleStatus; dueDate?: string; notes?: string; reversalReason?: string; reversedBy?: string; reversedAt?: string; refundAmount?: number; refundMethod?: string };
 export type CartItem = { productId: string; quantity: number };
 export type PendingSale = { id: string; customerId?: string; customerName?: string; discount: number; createdAt: string; items: CartItem[] };
-export type Customer = { id: string; name: string; phone: string; address?: string; creditLimit: number; utang: number; remainingCredit: number };
+export type CustomerType = 'regular' | 'suki';
+export type DiscountType = 'none' | 'percentage' | 'fixed';
+export type Customer = { id: string; name: string; phone: string; address?: string; customerType: CustomerType; discountType: DiscountType; discountValue: number; allowUtang: boolean; creditLimit: number; utang: number; remainingCredit: number; overdue: boolean };
 export type CreditStatus = 'Due' | 'Overdue' | 'Paid';
 export type CreditRecord = { id: string; customerId: string; date: string; dueDate: string; description: string; amount: number; remaining: number; notes?: string; status: CreditStatus };
 export type PaymentMethod = 'Cash' | 'GCash' | 'Maya' | 'Utang';
 export type PaymentRecord = { id: string; customerId: string; date: string; amount: number; method: Exclude<PaymentMethod, 'Utang'>; reference?: string };
-export type CompletedSale = { saleId: string; id: string; date: string; cashier: string; customer: string; paymentMethod: PaymentMethod; total: number; cashReceived?: number; change?: number };
+export type CompletedSale = { saleId: string; id: string; date: string; cashier: string; customer?: string; paymentMethod: PaymentMethod; subtotal: number; discountType: DiscountType; discountValue: number; discount: number; total: number; cashReceived?: number; change?: number };
 export type SaleReceiptItem = { id: string; productName: string; quantity: number; unitPrice: number; lineTotal: number };
 export type SaleReceipt = {
   saleId: string;
@@ -18,9 +20,11 @@ export type SaleReceipt = {
   createdAt: string;
   status: SaleStatus;
   cashier: string;
-  customer: string;
+  customer?: string;
   paymentMethod: PaymentMethod;
   subtotal: number;
+  discountType: DiscountType;
+  discountValue: number;
   discount: number;
   total: number;
   cashReceived?: number;

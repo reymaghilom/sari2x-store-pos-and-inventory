@@ -24,6 +24,10 @@ create table if not exists public.products (
 );
 create table if not exists public.customers (
   id text primary key, full_name text not null, phone text not null, address text,
+  customer_type text not null default 'regular' check (customer_type in ('regular', 'suki')),
+  discount_type text not null default 'none' check (discount_type in ('none', 'percentage', 'fixed')),
+  discount_value numeric(12,2) not null default 0 check (discount_value >= 0 and (discount_type <> 'percentage' or discount_value <= 100)),
+  allow_utang integer not null default 0 check (allow_utang in (0, 1)),
   credit_limit numeric(12,2) not null default 0 check (credit_limit >= 0),
   created_at timestamptz not null, updated_at timestamptz not null,
   deleted_at timestamptz, origin_device_id text
@@ -32,9 +36,12 @@ create table if not exists public.sales (
   id text primary key, transaction_number text not null unique,
   customer_id text references public.customers(id), cashier_id text not null references public.users(id),
   payment_method text not null check (payment_method in ('Cash', 'GCash', 'Maya', 'Utang')),
-  subtotal numeric(12,2) not null, discount numeric(12,2) not null default 0,
+  subtotal numeric(12,2) not null, discount_type text not null default 'none' check (discount_type in ('none', 'percentage', 'fixed')),
+  discount_value numeric(12,2) not null default 0 check (discount_value >= 0 and (discount_type <> 'percentage' or discount_value <= 100)),
+  discount numeric(12,2) not null default 0,
   total numeric(12,2) not null, cash_received numeric(12,2), change_amount numeric(12,2),
-  reference_number text, status text not null check (status in ('completed', 'held', 'voided', 'refunded', 'partially_refunded', 'cancelled')),
+  reference_number text, cashier_name_snapshot text not null default 'Owner', customer_name_snapshot text,
+  status text not null check (status in ('completed', 'held', 'voided', 'refunded', 'partially_refunded', 'cancelled')),
   created_at timestamptz not null, updated_at timestamptz not null,
   deleted_at timestamptz, origin_device_id text
 );
@@ -75,6 +82,26 @@ create table if not exists public.settings (
 );
 
 -- Existing projects: these statements safely expand the original checks.
+alter table public.customers add column if not exists customer_type text not null default 'regular';
+alter table public.customers add column if not exists discount_type text not null default 'none';
+alter table public.customers add column if not exists discount_value numeric(12,2) not null default 0;
+alter table public.customers add column if not exists allow_utang integer not null default 0;
+alter table public.sales add column if not exists discount_type text not null default 'none';
+alter table public.sales add column if not exists discount_value numeric(12,2) not null default 0;
+alter table public.sales add column if not exists cashier_name_snapshot text not null default 'Owner';
+alter table public.sales add column if not exists customer_name_snapshot text;
+alter table public.customers drop constraint if exists customers_customer_type_check;
+alter table public.customers add constraint customers_customer_type_check check (customer_type in ('regular', 'suki'));
+alter table public.customers drop constraint if exists customers_discount_type_check;
+alter table public.customers add constraint customers_discount_type_check check (discount_type in ('none', 'percentage', 'fixed'));
+alter table public.customers drop constraint if exists customers_discount_value_check;
+alter table public.customers add constraint customers_discount_value_check check (discount_value >= 0 and (discount_type <> 'percentage' or discount_value <= 100));
+alter table public.customers drop constraint if exists customers_allow_utang_check;
+alter table public.customers add constraint customers_allow_utang_check check (allow_utang in (0, 1));
+alter table public.sales drop constraint if exists sales_discount_type_check;
+alter table public.sales add constraint sales_discount_type_check check (discount_type in ('none', 'percentage', 'fixed'));
+alter table public.sales drop constraint if exists sales_discount_value_check;
+alter table public.sales add constraint sales_discount_value_check check (discount_value >= 0 and (discount_type <> 'percentage' or discount_value <= 100));
 alter table public.sales drop constraint if exists sales_status_check;
 alter table public.sales add constraint sales_status_check check (status in ('completed', 'held', 'voided', 'refunded', 'partially_refunded', 'cancelled'));
 alter table public.stock_movements drop constraint if exists stock_movements_type_check;
@@ -102,6 +129,7 @@ create table if not exists public.sale_refund_items (
 create index if not exists categories_updated_idx on public.categories(updated_at);
 create index if not exists products_updated_idx on public.products(updated_at);
 create index if not exists customers_updated_idx on public.customers(updated_at);
+create index if not exists customers_allow_utang_idx on public.customers(allow_utang, deleted_at);
 create index if not exists users_updated_idx on public.users(updated_at);
 create index if not exists stock_movements_product_idx on public.stock_movements(product_id, created_at);
 create index if not exists stock_movements_updated_idx on public.stock_movements(updated_at);

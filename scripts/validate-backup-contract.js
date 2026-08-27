@@ -39,5 +39,10 @@ const forbiddenPortableSettings = ['owner_user_id', 'owner_pin_needs_change', 's
 if (forbiddenPortableSettings.some((key) => portableSettings.has(key))) throw new Error('A device-local or security setting leaked into portable backup.');
 if (/password_hash/.test(requireMatch(backup, /users:\s*\{\s*exportColumns:\s*\[([^\]]+)\]/, 'portable user fields'))) throw new Error('Owner PIN hash leaked into portable backup.');
 if (!/MIN_SUPPORTED_BACKUP_SCHEMA_VERSION\s*=\s*5/.test(backup) || !/schema_version as number\)\s*<\s*MIN_SUPPORTED_BACKUP_SCHEMA_VERSION/.test(backup) || !/schema_version as number\)\s*>\s*CURRENT_SCHEMA_VERSION/.test(backup)) throw new Error('Index-only schema migration backup compatibility is not preserved.');
+for (const field of ['customer_type', 'discount_type', 'discount_value', 'cashier_name_snapshot', 'customer_name_snapshot']) {
+  if (!backup.includes(`'${field}'`) || !sync.includes(field) || !edge.includes(field)) throw new Error(`V7 field ${field} is missing from backup/sync/Edge compatibility.`);
+}
+if (!backup.includes("'allow_utang'") || !sync.includes('allow_utang') || !edge.includes('allow_utang')) throw new Error('Allow Utang is missing from backup/sync/Edge compatibility.');
+if (!/backupOutstanding[\s\S]+row\.allow_utang \?\?/i.test(backup)) throw new Error('Older backup Allow Utang inference is missing.');
 
 console.log(`Backup contract OK: ${sqliteTables.size} SQLite tables, ${backupTables.size} portable tables, ${syncTables.size} owner-scoped cloud tables, FK-safe reset coverage, and device-local secret exclusions validated`);

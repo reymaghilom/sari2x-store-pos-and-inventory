@@ -1,5 +1,5 @@
 export const DATABASE_NAME = 'sari-sari-store.db';
-export const CURRENT_SCHEMA_VERSION = 6;
+export const CURRENT_SCHEMA_VERSION = 8;
 
 export const migrationV1 = `
 CREATE TABLE IF NOT EXISTS users (
@@ -329,4 +329,45 @@ INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('appearance_pref
 export const migrationV6 = `
 CREATE INDEX IF NOT EXISTS idx_payments_credit
 ON credit_payments(credit_transaction_id, deleted_at);
+`;
+
+// Customer classification/default discounts are mutable master data. Sale
+// discount and display-name fields are immutable snapshots captured at checkout.
+export const migrationV7 = `
+ALTER TABLE customers ADD COLUMN customer_type TEXT NOT NULL DEFAULT 'regular' CHECK (customer_type IN ('regular', 'suki'));
+ALTER TABLE customers ADD COLUMN discount_type TEXT NOT NULL DEFAULT 'none' CHECK (discount_type IN ('none', 'percentage', 'fixed'));
+ALTER TABLE customers ADD COLUMN discount_value REAL NOT NULL DEFAULT 0 CHECK (discount_value >= 0 AND (discount_type <> 'percentage' OR discount_value <= 100));
+
+ALTER TABLE sales ADD COLUMN discount_type TEXT NOT NULL DEFAULT 'none' CHECK (discount_type IN ('none', 'percentage', 'fixed'));
+ALTER TABLE sales ADD COLUMN discount_value REAL NOT NULL DEFAULT 0 CHECK (discount_value >= 0 AND (discount_type <> 'percentage' OR discount_value <= 100));
+ALTER TABLE sales ADD COLUMN cashier_name_snapshot TEXT NOT NULL DEFAULT 'Owner';
+ALTER TABLE sales ADD COLUMN customer_name_snapshot TEXT;
+
+UPDATE sales
+SET cashier_name_snapshot = COALESCE(
+  NULLIF(TRIM((SELECT u.name FROM users u WHERE u.id = sales.cashier_id)), ''),
+  NULLIF(TRIM((SELECT value FROM settings WHERE key = 'owner_name' AND deleted_at IS NULL)), ''),
+  'Owner'
+);
+UPDATE sales
+SET customer_name_snapshot = (SELECT c.full_name FROM customers c WHERE c.id = sales.customer_id)
+WHERE customer_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_customers_type ON customers(customer_type, deleted_at);
+CREATE INDEX IF NOT EXISTS idx_sales_transaction_number ON sales(transaction_number);
+`;
+
+// New borrowing permission is independent from customer loyalty. Preserve
+// compatibility only for customers whose existing limit or live debt proves
+// that the V7 app treated them as credit-enabled.
+export const migrationV8 = `
+ALTER TABLE customers ADD COLUMN allow_utang INTEGER NOT NULL DEFAULT 0 CHECK (allow_utang IN (0, 1));
+UPDATE customers
+SET allow_utang = 1
+WHERE credit_limit > 0
+   OR MAX(0,
+        COALESCE((SELECT SUM(ct.amount) FROM credit_transactions ct WHERE ct.customer_id = customers.id AND ct.deleted_at IS NULL), 0)
+        - COALESCE((SELECT SUM(cp.amount) FROM credit_payments cp WHERE cp.customer_id = customers.id AND cp.deleted_at IS NULL), 0)
+      ) > 0;
+CREATE INDEX IF NOT EXISTS idx_customers_allow_utang ON customers(allow_utang, deleted_at);
 `;

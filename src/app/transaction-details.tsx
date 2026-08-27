@@ -10,6 +10,8 @@ import { useAppStore } from '@/store/app';
 import { useAuth } from '@/store/auth';
 import { peso } from '@/utils/format';
 import { formatStoredDate } from '@/utils/date';
+import { discountLabel } from '@/utils/discount';
+import { SaleReceipt } from '@/types';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
@@ -18,18 +20,18 @@ type Action = 'void' | 'refund';
 type RefundMethod = 'Cash' | 'GCash' | 'Maya';
 
 export default function TransactionDetails() {  const styles = useStyles();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { saleId } = useLocalSearchParams<{ saleId?: string }>();
   const { transactions, voidTransaction, refundTransaction } = useAppStore();
   const { user } = useAuth();
   const { canReverseTransactions } = useRole();
   const keyboardForm = useKeyboardAwareForm<'reason'>();
-  const transaction = transactions.find((item) => item.id === id);
+  const transaction = transactions.find((item) => item.saleId === saleId);
   const [action, setAction] = useState<Action | null>(null);
   const [reason, setReason] = useState('');
   const [method, setMethod] = useState<RefundMethod>('Cash');
   const [working, setWorking] = useState(false);
-  const [items, setItems] = useState<{ id: string; productName: string; quantity: number; unitPrice: number; lineTotal: number }[]>([]);
-  useEffect(() => { if (!transaction) return; let active = true; void getSaleReceipt(transaction.saleId).then((receipt) => { if (active) setItems(receipt?.items ?? []); }); return () => { active = false; }; }, [transaction]);
+  const [receipt, setReceipt] = useState<SaleReceipt | null>(null);
+  useEffect(() => { if (!transaction) return; let active = true; void getSaleReceipt(transaction.saleId).then((nextReceipt) => { if (active) setReceipt(nextReceipt); }); return () => { active = false; }; }, [transaction]);
   if (!transaction) return <PlaceholderScreen title="Transaction not found" description="This transaction is not available in local history." icon="receipt-outline" />;
 
   const submit = () => {
@@ -53,7 +55,7 @@ export default function TransactionDetails() {  const styles = useStyles();
   };
 
   const tone = transaction.status === 'Completed' ? 'success' : transaction.status === 'Voided' || transaction.status === 'Refunded' ? 'danger' : 'warning';
-  return <ScreenContainer {...keyboardForm.screenProps}><View style={styles.receipt}><Text style={styles.store}>Sari-sari Store</Text><Text style={styles.id}>{transaction.id}</Text><StatusBadge label={transaction.status} tone={tone} /><View style={styles.divider} /><Detail label="Date / Time" value={transaction.time} /><Detail label="Original Cashier" value={transaction.cashier} /><Detail label="Payment Method" value={transaction.paymentMethod} />{transaction.customer ? <Detail label="Customer" value={transaction.customer} /> : null}{transaction.dueDate ? <Detail label="Due Date" value={formatStoredDate(transaction.dueDate)} /> : null}{transaction.notes ? <Detail label="Notes" value={transaction.notes} /> : null}<View style={styles.divider} />{items.map((item) => <Detail key={item.id} label={`${item.quantity} × ${item.productName}`} value={peso(item.lineTotal)} />)}<View style={styles.divider} /><Detail label="Original Total" value={peso(transaction.amount)} strong />
+  return <ScreenContainer {...keyboardForm.screenProps}><View style={styles.receipt}><Text style={styles.store}>Sari-sari Store</Text><Text style={styles.id}>{transaction.id}</Text><StatusBadge label={transaction.status} tone={tone} /><View style={styles.divider} /><Detail label="Date / Time" value={transaction.time} /><Detail label="Original Cashier" value={transaction.cashier} /><Detail label="Payment Method" value={transaction.paymentMethod} />{transaction.customer ? <Detail label="Customer" value={transaction.customer} /> : null}{transaction.dueDate ? <Detail label="Due Date" value={formatStoredDate(transaction.dueDate)} /> : null}{transaction.notes ? <Detail label="Notes" value={transaction.notes} /> : null}<View style={styles.divider} />{receipt?.items.map((item) => <Detail key={item.id} label={`${item.quantity} × ${item.productName}`} value={peso(item.lineTotal)} />)}<View style={styles.divider} />{receipt ? <><Detail label="Subtotal" value={peso(receipt.subtotal)} />{receipt.discount > 0 ? <Detail label={discountLabel(receipt.discountType, receipt.discountValue, peso)} value={`−${peso(receipt.discount)}`} /> : null}</> : null}<Detail label="Original Total" value={peso(transaction.amount)} strong />
     {transaction.reversalReason ? <><View style={styles.divider} /><Detail label="Reason" value={transaction.reversalReason} /><Detail label="Reversed By" value={transaction.reversedBy ?? 'Unknown owner'} /><Detail label="Reversed At" value={transaction.reversedAt ?? 'Unknown time'} />{transaction.refundAmount !== undefined ? <Detail label="Refund" value={`${peso(transaction.refundAmount)} · ${transaction.refundMethod}`} /> : null}</> : null}
   </View>
   <PrimaryButton title="View Receipt" icon="receipt-outline" style={styles.button} onPress={() => router.push({ pathname: '/receipt', params: { saleId: transaction.saleId } })} />

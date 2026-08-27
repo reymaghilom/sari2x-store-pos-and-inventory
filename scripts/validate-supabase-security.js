@@ -2,6 +2,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const migration = fs.readFileSync(path.join(process.cwd(), 'supabase', 'migrations', '004_authenticated_owner_cloud.sql'), 'utf8');
+const featureMigration = fs.readFileSync(path.join(process.cwd(), 'supabase', 'migrations', '005_customer_discounts_transaction_snapshots.sql'), 'utf8');
+const utangPermissionMigration = fs.readFileSync(path.join(process.cwd(), 'supabase', 'migrations', '006_customer_utang_permission.sql'), 'utf8');
 const edgeIndex = fs.readFileSync(path.join(process.cwd(), 'supabase', 'functions', 'store-admin', 'index.ts'), 'utf8');
 const edgeLogic = fs.readFileSync(path.join(process.cwd(), 'supabase', 'functions', 'store-admin', 'logic.ts'), 'utf8');
 const edge = `${edgeIndex}\n${edgeLogic}`;
@@ -27,6 +29,15 @@ if (/grant\s+[^;]*delete/i.test(migration)) throw new Error('Migration grants DE
 requirePattern(migration, /security definer/i, 'Privileged RPCs are not SECURITY DEFINER');
 requirePattern(migration, /revoke all on function public\.admin_replace_owned_store[\s\S]+from public, anon, authenticated/i, 'Snapshot RPC remains callable by a mobile role');
 requirePattern(migration, /grant execute on function public\.admin_replace_owned_store[\s\S]+to service_role/i, 'Snapshot RPC is not restricted to service_role');
+requirePattern(featureMigration, /customer_type[\s\S]+discount_type[\s\S]+discount_value/i, 'Customer discount cloud migration is incomplete');
+requirePattern(featureMigration, /cashier_name_snapshot[\s\S]+customer_name_snapshot/i, 'Immutable sale-name snapshots are missing from the cloud migration');
+requirePattern(featureMigration, /set_config\('app\.store_admin', '1', true\)[\s\S]+update public\.sales/i, 'V7 historical snapshot backfill does not safely cooperate with the immutable-sale trigger');
+requirePattern(featureMigration, /jsonb_to_recordset[\s\S]+customer_type[\s\S]+cashier_name_snapshot/i, 'Snapshot replacement RPC does not include V7 fields');
+requirePattern(featureMigration, /revoke all on function public\.admin_replace_owned_store[\s\S]+service_role/i, 'V7 replacement RPC permissions are unsafe');
+requirePattern(utangPermissionMigration, /allow_utang[\s\S]+check \(allow_utang in \(0, 1\)\)/i, 'Allow Utang cloud constraint is missing');
+requirePattern(utangPermissionMigration, /credit_limit > 0[\s\S]+credit_transactions[\s\S]+credit_payments/i, 'Allow Utang cloud compatibility inference is incomplete');
+requirePattern(utangPermissionMigration, /admin_replace_owned_store_v7[\s\S]+jsonb_to_recordset[\s\S]+allow_utang integer/i, 'V8 snapshot replacement wrapper is incomplete');
+requirePattern(utangPermissionMigration, /revoke all on function public\.admin_replace_owned_store\(uuid, jsonb\)[\s\S]+service_role/i, 'V8 replacement RPC permissions are unsafe');
 
 let previous = -1;
 for (const table of deleteOrder) {

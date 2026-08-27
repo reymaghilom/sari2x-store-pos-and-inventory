@@ -1,6 +1,7 @@
 import { SaleReceipt } from '@/types';
 import { formatStoredDate } from '@/utils/date';
 import { peso as currency } from '@/utils/format';
+import { discountLabel } from '@/utils/discount';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
@@ -43,6 +44,8 @@ export function buildReceiptHtml(receipt: SaleReceipt) {
   const address = receipt.storeAddress ? `<div>${escapeHtml(receipt.storeAddress)}</div>` : '';
   const phone = receipt.storePhone ? `<div>${escapeHtml(receipt.storePhone)}</div>` : '';
   const reversed = receipt.status !== 'Completed' && receipt.status !== 'Held' ? `<section class="reversal"><strong>${escapeHtml(receipt.status.toUpperCase())}</strong>${receipt.refundAmount !== undefined ? `<div>Refund: ${currency(receipt.refundAmount)} · ${escapeHtml(receipt.refundMethod ?? '')}</div>` : ''}<div>${escapeHtml(receipt.reversalReason ?? '')}</div><div>${escapeHtml(receipt.reversedBy ?? '')} · ${escapeHtml(receipt.reversedAt ? formatReceiptDate(receipt.reversedAt) : '')}</div></section>` : '';
+  const customer = receipt.customer ? `<div class="row"><span>Customer</span><strong>${escapeHtml(receipt.customer)}</strong></div>` : '';
+  const discount = receipt.discount > 0 ? `<div class="row"><span>${escapeHtml(discountLabel(receipt.discountType, receipt.discountValue, currency))}</span><strong>-${currency(receipt.discount)}</strong></div>` : '';
 
   return `<!doctype html>
 <html lang="en">
@@ -75,15 +78,15 @@ export function buildReceiptHtml(receipt: SaleReceipt) {
     </header>
     ${reversed}
     <div class="divider"></div>
-    <div class="row"><span>Transaction</span><strong>${escapeHtml(receipt.transactionNumber)}</strong></div>
+    <div class="row"><span>Transaction No.</span><strong>${escapeHtml(receipt.transactionNumber)}</strong></div>
     <div class="row"><span>Date / time</span><strong>${escapeHtml(formatReceiptDate(receipt.createdAt))}</strong></div>
     <div class="row"><span>Cashier</span><strong>${escapeHtml(receipt.cashier)}</strong></div>
-    <div class="row"><span>Customer</span><strong>${escapeHtml(receipt.customer)}</strong></div>
+    ${customer}
     <div class="divider"></div>
     ${items}
     <div class="divider"></div>
     <div class="row"><span>Subtotal</span><strong>${currency(receipt.subtotal)}</strong></div>
-    <div class="row"><span>Discount</span><strong>${currency(receipt.discount)}</strong></div>
+    ${discount}
     <div class="row total"><strong>Total</strong><strong>${currency(receipt.total)}</strong></div>
     <div class="row"><span>Payment</span><strong>${escapeHtml(receipt.paymentMethod)}</strong></div>
     ${paymentDetails(receipt)}

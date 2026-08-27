@@ -7,6 +7,7 @@ import { printReceipt, ReceiptActionError, shareReceiptPdf } from '@/services/re
 import { SaleReceipt } from '@/types';
 import { peso } from '@/utils/format';
 import { formatStoredDate } from '@/utils/date';
+import { discountLabel } from '@/utils/discount';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -89,11 +90,11 @@ export default function ReceiptScreen() {
       <StatusBadge label={receipt.status.toUpperCase()} tone={receipt.status === 'Completed' ? 'success' : receipt.status === 'Held' ? 'warning' : 'danger'} />
       {receipt.status !== 'Completed' && receipt.status !== 'Held' ? <View style={styles.reversal}><Text style={styles.reversalTitle}>{receipt.status.toUpperCase()}</Text>{receipt.refundAmount !== undefined ? <Text style={styles.reversalText}>Refund amount: {peso(receipt.refundAmount)} · {receipt.refundMethod}</Text> : null}<Text style={styles.reversalText}>Reason: {receipt.reversalReason}</Text><Text style={styles.reversalText}>By {receipt.reversedBy} · {receipt.reversedAt ? new Date(receipt.reversedAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : ''}</Text></View> : null}
       <Divider />
-      <ReceiptLine label="Transaction" value={receipt.transactionNumber} />
+      <ReceiptLine label="Transaction No." value={receipt.transactionNumber} />
       <ReceiptLine label="Date" value={date} />
       {time ? <ReceiptLine label="Time" value={time} /> : null}
       <ReceiptLine label="Cashier" value={receipt.cashier} />
-      <ReceiptLine label="Customer" value={receipt.customer} />
+      {receipt.customer ? <ReceiptLine label="Customer" value={receipt.customer} /> : null}
       <Divider />
       {receipt.items.length ? receipt.items.map((item) => <View key={item.id} style={styles.item}>
         <Text style={styles.itemName}>{item.productName}</Text>
@@ -101,7 +102,7 @@ export default function ReceiptScreen() {
       </View>) : <View style={styles.warning}><Ionicons name="alert-circle-outline" size={20} color={colors.warning} /><Text style={styles.warningText}>No saved item snapshots were found for this sale.</Text></View>}
       <Divider />
       <ReceiptLine label="Subtotal" value={peso(receipt.subtotal)} />
-      <ReceiptLine label="Discount" value={peso(receipt.discount)} />
+      {receipt.discount > 0 ? <ReceiptLine label={discountLabel(receipt.discountType, receipt.discountValue, peso)} value={`−${peso(receipt.discount)}`} /> : null}
       <ReceiptLine label="Total" value={peso(receipt.total)} strong />
       <ReceiptLine label="Payment" value={receipt.paymentMethod} />
       {receipt.paymentMethod === 'Cash' ? <><ReceiptLine label="Cash Received" value={peso(receipt.cashReceived ?? receipt.total)} /><ReceiptLine label="Change" value={peso(receipt.change ?? 0)} /></> : null}

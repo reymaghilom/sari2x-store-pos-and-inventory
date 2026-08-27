@@ -1,4 +1,3 @@
-import { themeHex } from '@/constants/theme';
 import { useAndroidImmersiveNavigation } from '@/hooks/useAndroidImmersiveNavigation';
 import { AuthProvider, useAuth } from '@/store/auth';
 import { AppearanceProvider, useAppearance } from '@/store/appearance';
@@ -8,7 +7,6 @@ import { SyncProvider } from '@/store/sync';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { ComponentProps, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -21,16 +19,14 @@ function AppRoot() {
   const { colorScheme, colors } = useAppearance();
   const segments = useSegments();
   const authenticationScreen = segments[0] === 'login';
-  const statusBarBackground = authenticationScreen ? themeHex[colorScheme].background : themeHex[colorScheme].primary;
-  return <SafeAreaProvider><AuthProvider><AppProvider><CloudAuthProvider><SyncProvider><StatusBar backgroundColor={statusBarBackground} style={authenticationScreen && colorScheme === 'light' ? 'dark' : 'light'} hidden={false} translucent /><GuardedStack screenOptions={{
+  return <SafeAreaProvider><AuthProvider><AppProvider><CloudAuthProvider><SyncProvider><StatusBar style={authenticationScreen && colorScheme === 'light' ? 'dark' : 'light'} hidden={false} /><GuardedStack screenOptions={{
+    headerShown: true,
+    headerTransparent: false,
+    headerBackVisible: true,
     headerStyle: { backgroundColor: colors.primary },
     headerTintColor: colors.primaryText,
     headerTitleStyle: { fontWeight: '600' },
     headerShadowVisible: false,
-    ...(Platform.OS === 'android' ? {
-      statusBarHidden: false,
-      statusBarTranslucent: true,
-    } : {}),
   }}>
     <Stack.Screen name="index" options={{ headerShown: false }} />
     <Stack.Screen name="login" options={{ headerShown: false }} />
@@ -38,7 +34,7 @@ function AppRoot() {
     <Stack.Screen name="barcode-scanner" options={{ title: 'Scan Barcode' }} />
     <Stack.Screen name="cart" options={{ title: 'Cart / Checkout' }} />
     <Stack.Screen name="pending-sales" options={{ title: 'Pending Sales' }} />
-    <Stack.Screen name="payment-success" options={{ title: 'Payment Complete', headerShown: false }} />
+    <Stack.Screen name="payment-success" options={{ title: 'Payment Complete' }} />
     <Stack.Screen name="receipt" options={{ title: 'Receipt' }} />
     <Stack.Screen name="printer-setup" options={{ title: 'Printer Setup' }} />
     <Stack.Screen name="product-details" options={{ title: 'Product Details' }} />
@@ -47,6 +43,7 @@ function AppRoot() {
     <Stack.Screen name="stock-movement" options={{ title: 'Stock In / Out' }} />
     <Stack.Screen name="customers" options={{ title: 'Customers' }} />
     <Stack.Screen name="add-customer" options={{ title: 'Add Customer' }} />
+    <Stack.Screen name="edit-customer" options={{ title: 'Edit Customer' }} />
     <Stack.Screen name="customer-details" options={{ title: 'Customer Details' }} />
     <Stack.Screen name="customer-utang-details" options={{ title: 'Customer Utang' }} />
     <Stack.Screen name="new-utang" options={{ title: 'New Utang' }} />

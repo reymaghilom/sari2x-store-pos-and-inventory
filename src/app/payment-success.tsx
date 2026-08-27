@@ -7,6 +7,7 @@ import { getPrinterSettings } from '@/services/printerSettings';
 import { printReceipt, ReceiptActionError, shareReceiptPdf } from '@/services/receipt';
 import { useAppStore } from '@/store/app';
 import { peso } from '@/utils/format';
+import { discountLabel } from '@/utils/discount';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -75,8 +76,10 @@ export default function PaymentSuccess() {
     <View style={styles.details}>
       <Detail label="Date / Time" value={lastSale.date} />
       <Detail label="Cashier" value={lastSale.cashier} />
-      <Detail label="Customer" value={lastSale.customer} />
+      {lastSale.customer ? <Detail label="Customer" value={lastSale.customer} /> : null}
       <Detail label="Payment Method" value={lastSale.paymentMethod} />
+      <Detail label="Subtotal" value={peso(lastSale.subtotal)} />
+      {lastSale.discount > 0 ? <Detail label={discountLabel(lastSale.discountType, lastSale.discountValue, peso)} value={`−${peso(lastSale.discount)}`} /> : null}
       <Detail label="Total Amount" value={peso(lastSale.total)} />
       {lastSale.cashReceived !== undefined ? <Detail label="Cash Received" value={peso(lastSale.cashReceived)} /> : null}
       {lastSale.change !== undefined ? <Detail label="Change" value={peso(lastSale.change)} success /> : null}

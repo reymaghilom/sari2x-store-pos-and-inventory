@@ -1,6 +1,7 @@
 import { PaperWidth } from '@/services/printerSettings';
 import { SaleReceipt } from '@/types';
 import { formatStoredDate } from '@/utils/date';
+import { discountLabel } from '@/utils/discount';
 
 const ESC = 0x1b; const GS = 0x1d;
 const charsFor = (paper: PaperWidth) => paper === '80mm' ? 48 : 32;
@@ -37,14 +38,14 @@ export function formatEscPosReceipt(receipt: SaleReceipt, paper: PaperWidth, aut
   if (receipt.storePhone) text(bytes, receipt.storePhone);
   if (receipt.status !== 'Completed' && receipt.status !== 'Held') { bytes.push(ESC, 0x45, 0x01); text(bytes, `*** ${receipt.status.toUpperCase()} ***`); bytes.push(ESC, 0x45, 0x00); }
   bytes.push(ESC, 0x61, 0x00); text(bytes, line('-', width));
-  text(bytes, columns('Transaction', receipt.transactionNumber, width));
+  text(bytes, columns('Transaction No.', receipt.transactionNumber, width));
   const date = new Date(receipt.createdAt); text(bytes, columns('Date', Number.isNaN(date.getTime()) ? receipt.createdAt : date.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }), width));
-  text(bytes, columns('Cashier', receipt.cashier, width)); text(bytes, columns('Customer', receipt.customer, width)); text(bytes, line('-', width));
+  text(bytes, columns('Cashier', receipt.cashier, width)); if (receipt.customer) text(bytes, columns('Customer', receipt.customer, width)); text(bytes, line('-', width));
   for (const item of receipt.items) {
     for (const part of wrap(item.productName, width)) text(bytes, part);
     text(bytes, columns(`${item.quantity} x ${money(item.unitPrice)}`, money(item.lineTotal), width));
   }
-  text(bytes, line('-', width)); text(bytes, columns('Subtotal', money(receipt.subtotal), width)); text(bytes, columns('Discount', money(receipt.discount), width));
+  text(bytes, line('-', width)); text(bytes, columns('Subtotal', money(receipt.subtotal), width)); if (receipt.discount > 0) text(bytes, columns(discountLabel(receipt.discountType, receipt.discountValue, money), `-${money(receipt.discount)}`, width));
   bytes.push(ESC, 0x45, 0x01); text(bytes, columns('TOTAL', money(receipt.total), width)); bytes.push(ESC, 0x45, 0x00);
   text(bytes, columns('Payment', receipt.paymentMethod, width));
   if (receipt.paymentMethod === 'Cash') { text(bytes, columns('Cash received', money(receipt.cashReceived ?? receipt.total), width)); text(bytes, columns('Change', money(receipt.change ?? 0), width)); }

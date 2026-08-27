@@ -14,7 +14,9 @@
       "package": "com.rey.sarisaristore",
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
-        "android.permission.BLUETOOTH_CONNECT"
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.CAMERA",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -25,10 +27,8 @@
       "predictiveBackGestureEnabled": false
     },
     "androidStatusBar": {
-      "backgroundColor": "#2146D0",
       "barStyle": "light-content",
-      "hidden": false,
-      "translucent": true
+      "hidden": false
     },
     "web": {
       "output": "static",
@@ -83,6 +83,18 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "expo-navigation-bar": {
+        "visibility": "hidden",
+        "behavior": "overlay-swipe",
+        "position": "relative",
+        "legacyVisible": "sticky-immersive"
+      },
+      "eas": {
+        "projectId": "0087785c-12e9-4848-bb6d-2c2e257f3160"
+      }
     }
   }
 }

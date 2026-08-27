@@ -33,7 +33,7 @@ export default function TransactionHistoryScreen() {
           <Pressable
             key={transaction.saleId}
             accessibilityRole="button"
-            onPress={() => router.push({ pathname: '/transaction-details', params: { id: transaction.id } })}
+            onPress={() => router.push({ pathname: '/transaction-details', params: { saleId: transaction.saleId } })}
             style={({ pressed }) => [styles.row, pressed && styles.pressed]}
           >
             <View style={styles.icon}><Ionicons name="receipt-outline" size={20} color={colors.primary} /></View>

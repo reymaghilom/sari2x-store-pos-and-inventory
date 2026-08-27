@@ -44,7 +44,7 @@ export async function seedDatabase(db: SQLiteDatabase) {
       }
     }
     if (developmentSeedEnabled && !customerCount) {
-      for (const customer of initialCustomers) await db.runAsync('INSERT OR IGNORE INTO customers (id, full_name, phone, address, credit_limit, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)', `seed-customer-${customer.id}`, customer.name, customer.phone, customer.address ?? null, customer.creditLimit, now, now);
+      for (const customer of initialCustomers) await db.runAsync('INSERT OR IGNORE INTO customers (id, full_name, phone, address, customer_type, discount_type, discount_value, allow_utang, credit_limit, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', `seed-customer-${customer.id}`, customer.name, customer.phone, customer.address ?? null, customer.customerType, customer.discountType, customer.discountValue, customer.allowUtang ? 1 : 0, customer.creditLimit, now, now);
       for (const credit of initialCredits) await db.runAsync('INSERT OR IGNORE INTO credit_transactions (id, customer_id, sale_id, amount, due_date, description, notes, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', `seed-${credit.id}`, `seed-customer-${credit.customerId}`, null, credit.amount, credit.dueDate, credit.description, credit.notes ?? null, credit.status, primaryUser?.id ?? null, now, now);
       for (const customer of initialCustomers) {
         const credit = initialCredits.find((item) => item.customerId === customer.id);

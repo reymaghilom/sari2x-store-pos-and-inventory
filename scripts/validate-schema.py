@@ -12,6 +12,8 @@ migration_v3 = blocks[5]
 migration_v4 = blocks[7]
 migration_v5 = blocks[9]
 migration_v6 = blocks[11]
+migration_v7 = blocks[13]
+migration_v8 = blocks[15]
 financial_summary_sql = reports_source.split("export const financialSummarySql = `", 1)[1].split("`;", 1)[0]
 database = sqlite3.connect(":memory:")
 database.executescript(schema)
@@ -24,6 +26,14 @@ database.execute("PRAGMA foreign_keys = ON")
 database.executescript(migration_v4)
 database.executescript(migration_v5)
 database.executescript(migration_v6)
+database.executescript(migration_v7)
+compatibility_timestamp = "2026-08-20T00:00:00.000Z"
+database.execute("INSERT INTO customers (id, full_name, phone, credit_limit, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", ("migration-limit", "Limit Customer", "1", 1000, compatibility_timestamp, compatibility_timestamp))
+database.execute("INSERT INTO customers (id, full_name, phone, credit_limit, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", ("migration-debt", "Debt Customer", "2", 0, compatibility_timestamp, compatibility_timestamp))
+database.execute("INSERT INTO customers (id, full_name, phone, credit_limit, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", ("migration-disabled", "No Credit Customer", "3", 0, compatibility_timestamp, compatibility_timestamp))
+database.execute("INSERT INTO credit_transactions (id, customer_id, amount, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", ("migration-credit", "migration-debt", 100, "Due", compatibility_timestamp, compatibility_timestamp))
+database.execute("INSERT INTO credit_payments (id, credit_transaction_id, customer_id, amount, payment_method, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", ("migration-payment", "migration-credit", "migration-debt", 20, "Cash", compatibility_timestamp, compatibility_timestamp))
+database.executescript(migration_v8)
 sale_item_parents = {row[2] for row in database.execute("PRAGMA foreign_key_list(sale_items)")}
 if "sales" not in sale_item_parents:
     raise SystemExit("Migration did not preserve the sale_items -> sales foreign key")
@@ -36,6 +46,18 @@ if missing:
 payment_indexes = {row[1] for row in database.execute("PRAGMA index_list(credit_payments)")}
 if "idx_payments_credit" not in payment_indexes:
     raise SystemExit("Credit-payment transaction lookup index migration failed")
+
+customer_columns = {row[1] for row in database.execute("PRAGMA table_info(customers)")}
+sale_columns = {row[1] for row in database.execute("PRAGMA table_info(sales)")}
+if not {"customer_type", "discount_type", "discount_value"}.issubset(customer_columns):
+    raise SystemExit("V7 customer classification/discount columns are missing")
+if not {"discount_type", "discount_value", "cashier_name_snapshot", "customer_name_snapshot"}.issubset(sale_columns):
+    raise SystemExit("V7 immutable sale snapshot columns are missing")
+if "allow_utang" not in customer_columns:
+    raise SystemExit("V8 Allow Utang column is missing")
+permission_rows = dict(database.execute("SELECT id, allow_utang FROM customers WHERE id LIKE 'migration-%'"))
+if permission_rows != {"migration-limit": 1, "migration-debt": 1, "migration-disabled": 0}:
+    raise SystemExit(f"V8 Allow Utang compatibility inference failed: {permission_rows}")
 
 lock_timeout = database.execute("SELECT value FROM settings WHERE key = 'security_lock_timeout_ms'").fetchone()
 if lock_timeout != ("300000",):
@@ -161,6 +183,14 @@ database.execute("INSERT INTO sale_items (id, sale_id, product_id, product_name_
 utang_day = financial_summary("2026-08-24T00:00:00.000Z", "2026-08-25T00:00:00.000Z")
 if utang_day["today_sales"] != 50 or utang_day["today_profit"] != 20:
     raise SystemExit("Utang sale profit calculation failed")
+
+# A discount reduces revenue and profit, while COGS remains the immutable item cost.
+discounted_at = "2026-08-25T08:00:00.000Z"
+database.execute("INSERT INTO sales (id, transaction_number, cashier_id, payment_method, subtotal, discount_type, discount_value, discount, total, cashier_name_snapshot, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ("discount-sale", "TXN-082526-001", "user", "Cash", 100, "percentage", 10, 10, 90, "Store Owner", "completed", discounted_at, discounted_at))
+database.execute("INSERT INTO sale_items (id, sale_id, product_id, product_name_snapshot, quantity, unit_price, cost_price, subtotal, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ("discount-item", "discount-sale", "product", "Test product", 2, 50, 30, 100, discounted_at, discounted_at))
+discount_day = financial_summary("2026-08-25T00:00:00.000Z", "2026-08-26T00:00:00.000Z")
+if discount_day["today_sales"] != 90 or discount_day["today_profit"] != 30:
+    raise SystemExit("Discounted net revenue/profit calculation failed")
 try:
     database.execute("INSERT INTO sale_refunds (id, sale_id, refund_number, amount, refund_method, reason, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", ("refund-duplicate", "sale", "#REF-DUP", 20, "Cash", "Duplicate", "user", timestamp, timestamp))
 except sqlite3.IntegrityError:
@@ -212,4 +242,4 @@ if owner_after_reset != [("user", owner_hash)]:
 if database.execute("PRAGMA foreign_key_check").fetchall():
     raise SystemExit("Complete store reset left foreign-key violations")
 
-print(f"Schema OK: {len(expected)} tables, credit-limit/outstanding/remaining-credit cases and checkout boundary, payment/reversal balance handling, zero/normal/refund/void/Utang profit aggregates, sync columns, pending-sale stock isolation/cascade, reversal constraints, history preservation, movement idempotency, retry retention, and Owner-safe complete reset validated")
+print(f"Schema OK: {len(expected)} tables, V8 Allow Utang compatibility inference, credit-limit/outstanding/remaining-credit cases and permission boundary, payment/reversal balance handling, zero/normal/refund/void/Utang profit aggregates, sync columns, pending-sale stock isolation/cascade, reversal constraints, history preservation, movement idempotency, retry retention, and Owner-safe complete reset validated")

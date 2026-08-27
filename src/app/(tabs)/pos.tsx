@@ -5,12 +5,13 @@ import { AppHeader, PrimaryButton, ScreenContainer, SearchBar, SecondaryButton }
 import { radius, spacing, typography } from '@/constants/theme';
 import { useAppStore } from '@/store/app';
 import { peso } from '@/utils/format';
+import { discountLabel } from '@/utils/discount';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { BackHandler, Text, View } from 'react-native';
 
 export default function PosScreen() {  const styles = useStyles();
-  const { products, addToCart, cartCount, cartSubtotal, pendingSales, customers, utangSaleCustomerId, cancelUtangSale } = useAppStore();
+  const { products, addToCart, cartCount, cartTotal, pendingSales, customers, utangSaleCustomerId, cancelUtangSale } = useAppStore();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
   const categories = ['All', ...Array.from(new Set(products.map((product) => product.category)))];
@@ -22,7 +23,7 @@ export default function PosScreen() {  const styles = useStyles();
     <View style={styles.page}>
       <ScreenContainer>
         <AppHeader title={utangCustomer ? `New Utang for ${utangCustomer.name}` : 'New Sale'} subtitle={utangCustomer ? 'Add the products this customer is buying' : 'Search or scan products to begin'} />
-        {utangCustomer ? <View style={styles.intent}><View style={styles.intentText}><Text style={styles.intentTitle}>Customer: {utangCustomer.name}</Text><Text style={styles.intentMeta}>Remaining credit: {peso(utangCustomer.remainingCredit)}</Text></View><SecondaryButton title="Change Customer" onPress={() => router.push({ pathname: '/customers', params: { select: 'utang-sale' } })} /><SecondaryButton title="Cancel" onPress={cancelUtangSale} /></View> : null}
+        {utangCustomer ? <View style={styles.intent}><View style={styles.intentText}><Text style={styles.intentTitle}>Customer: {utangCustomer.name}{utangCustomer.customerType === 'suki' ? ' · Suki' : ''}</Text><Text style={styles.intentMeta}>Remaining credit: {peso(utangCustomer.remainingCredit)}{utangCustomer.customerType === 'suki' && utangCustomer.discountType !== 'none' ? ` · ${discountLabel(utangCustomer.discountType, utangCustomer.discountValue, peso)}` : ''}</Text></View><SecondaryButton title="Change Customer" onPress={() => router.push({ pathname: '/customers', params: { select: 'utang-sale' } })} /><SecondaryButton title="Cancel" onPress={cancelUtangSale} /></View> : null}
         {pendingSales.length ? <PrimaryButton title={`Pending Sales (${pendingSales.length})`} icon="time-outline" onPress={() => router.push('/pending-sales' as never)} /> : null}
         <SearchBar placeholder="Search product or scan barcode" value={query} onChangeText={setQuery} onScan={() => router.push({ pathname: '/barcode-scanner', params: { mode: 'pos' } })} />
         <FilterChips items={categories} active={category} onChange={setCategory} />
@@ -31,7 +32,7 @@ export default function PosScreen() {  const styles = useStyles();
           {visible.length === 0 ? <Text style={styles.empty}>No matching products found.</Text> : null}
         </View>
       </ScreenContainer>
-      <View style={styles.cart}><PrimaryButton title={`View Cart (${cartCount}) · ${peso(cartSubtotal)}`} icon="cart-outline" onPress={() => router.push('/cart')} /></View>
+      <View style={styles.cart}><PrimaryButton title={`View Cart (${cartCount}) · ${peso(cartTotal)}`} icon="cart-outline" onPress={() => router.push('/cart')} /></View>
     </View>
   );
 }

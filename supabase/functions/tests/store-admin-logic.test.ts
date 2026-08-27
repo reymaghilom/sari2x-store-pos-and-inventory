@@ -29,8 +29,29 @@ async function run() {
 
   const valid = emptySnapshot();
   valid.tables.settings = [{ key: 'store_address', value: '', updated_at: '2026-08-22T12:00:00.000Z', deleted_at: null, origin_device_id: 'device-fixture' }];
+  valid.tables.users = [{ id: '11111111-1111-4111-8111-111111111111', name: 'Original Owner', username: 'owner', role: 'admin', status: 'active', created_at: '2026-08-22T12:00:00.000Z', updated_at: '2026-08-22T12:00:00.000Z', deleted_at: null, origin_device_id: 'device-fixture' }];
+  valid.tables.customers = [{ id: '22222222-2222-4222-8222-222222222222', full_name: 'Suki Customer', phone: '09170000000', address: null, customer_type: 'suki', discount_type: 'percentage', discount_value: 10, allow_utang: 0, credit_limit: 500, created_at: '2026-08-22T12:00:00.000Z', updated_at: '2026-08-22T12:00:00.000Z', deleted_at: null, origin_device_id: 'device-fixture' }];
+  valid.tables.sales = [{ id: '33333333-3333-4333-8333-333333333333', transaction_number: 'TXN-082226-001', customer_id: '22222222-2222-4222-8222-222222222222', cashier_id: '11111111-1111-4111-8111-111111111111', payment_method: 'Cash', subtotal: 100, discount_type: 'percentage', discount_value: 10, discount: 10, total: 90, cash_received: 100, change_amount: 10, reference_number: null, cashier_name_snapshot: 'Original Owner', customer_name_snapshot: 'Suki Customer', status: 'completed', created_at: '2026-08-22T12:00:00.000Z', updated_at: '2026-08-22T12:00:00.000Z', deleted_at: null, origin_device_id: 'device-fixture' }];
   const replace = validateActionRequest({ action: 'replace', snapshot: valid });
-  assert(replace.action === 'replace' && replace.snapshot.tables.settings[0].value === '', 'Valid replacement settings were rejected.');
+  assert(replace.action === 'replace' && replace.snapshot.tables.customers[0].allow_utang === 0, 'Valid V8 customer permission snapshot was rejected.');
+
+  const invalidDiscount = structuredClone(valid);
+  invalidDiscount.tables.customers[0].discount_value = 100.01;
+  try {
+    validateSnapshot(invalidDiscount);
+    throw new Error('Out-of-range customer discount fixture was accepted.');
+  } catch (error) {
+    assert(error instanceof StoreAdminValidationError && error.fields.includes('discount_value'), 'Invalid customer discount did not return a structured field error.');
+  }
+
+  const invalidUtangPermission = structuredClone(valid);
+  invalidUtangPermission.tables.customers[0].allow_utang = 2;
+  try {
+    validateSnapshot(invalidUtangPermission);
+    throw new Error('Invalid Allow Utang fixture was accepted.');
+  } catch (error) {
+    assert(error instanceof StoreAdminValidationError && error.fields.includes('allow_utang'), 'Invalid Allow Utang did not return a structured field error.');
+  }
 
   const incomplete = emptySnapshot();
   incomplete.tables.settings = [{ key: 'store_address', value: '' }];
