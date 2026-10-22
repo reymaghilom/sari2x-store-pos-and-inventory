@@ -19,6 +19,28 @@ Store connectivity can be unreliable, so the app is built **offline-first**. Eve
 - **Offline sync and backup:** a local sync queue with idempotent retries, last-write-wins merging for editable records, and JSON backup/restore.
 - **Security:** a 4-digit Owner PIN lock (stored only as a hash on the device), Supabase Auth for the cloud account, and row-level security that limits cloud data to its owner (`owner_id = auth.uid()`).
 
+## Application Screenshots
+
+![Home Dashboard](screenshots/1.jpg)
+![Home Dashboard](screenshots/2.jpg)
+![Home Dashboard](screenshots/3.jpg)
+![Home Dashboard](screenshots/4.jpg)
+![Home Dashboard](screenshots/5.jpg)
+![Home Dashboard](screenshots/6.jpg)
+![Home Dashboard](screenshots/7.jpg)
+![Home Dashboard](screenshots/8.jpg)
+![Home Dashboard](screenshots/9.jpg)
+![Home Dashboard](screenshots/10.jpg)
+![Home Dashboard](screenshots/11.jpg)
+![Home Dashboard](screenshots/12.jpg)
+![Home Dashboard](screenshots/13.jpg)
+![Home Dashboard](screenshots/14.jpg)
+![Home Dashboard](screenshots/15.jpg)
+![Home Dashboard](screenshots/16.jpg)
+![Home Dashboard](screenshots/17.jpg)
+![Home Dashboard](screenshots/18.jpg)
+
+
 ## Technology Stack
 
 | Category | Technologies |
