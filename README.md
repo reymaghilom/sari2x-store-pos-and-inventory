@@ -21,24 +21,67 @@ Store connectivity can be unreliable, so the app is built **offline-first**. Eve
 
 ## Application Screenshots
 
-![Home Dashboard](screenshots/1.jpg)
-![Home Dashboard](screenshots/2.jpg)
-![Home Dashboard](screenshots/3.jpg)
-![Home Dashboard](screenshots/4.jpg)
-![Home Dashboard](screenshots/5.jpg)
-![Home Dashboard](screenshots/6.jpg)
-![Home Dashboard](screenshots/7.jpg)
-![Home Dashboard](screenshots/8.jpg)
-![Home Dashboard](screenshots/9.jpg)
-![Home Dashboard](screenshots/10.jpg)
-![Home Dashboard](screenshots/11.jpg)
-![Home Dashboard](screenshots/12.jpg)
-![Home Dashboard](screenshots/13.jpg)
-![Home Dashboard](screenshots/14.jpg)
-![Home Dashboard](screenshots/15.jpg)
-![Home Dashboard](screenshots/16.jpg)
-![Home Dashboard](screenshots/17.jpg)
-![Home Dashboard](screenshots/18.jpg)
+### Featured Screens
+
+<p align="center">
+  <img src="screenshots/1.jpg" width="190" alt="Pin">
+  <img src="screenshots/12.jpg" width="190" alt="Dashboard">
+  <img src="screenshots/5.jpg" width="190" alt="POS Checkout">
+  <img src="screenshots/2.jpg" width="190" alt="Inventory">
+  <img src="screenshots/4.jpg" width="190" alt="Inventory">
+</p>
+<p align="center">
+  <sub>Dashboard · POS Checkout · Inventory</sub>
+</p>
+
+<p align="center">
+  <img src="screenshots/16.jpg" width="190" alt="Utang Tracking">
+  <img src="screenshots/18.jpg" width="190" alt="Reports">
+  <img src="screenshots/17.jpg" width="190" alt="Reports">
+</p>
+<p align="center">
+  <sub>Utang Tracking · Receipt · Reports</sub>
+</p>
+
+<details>
+<summary><strong>View 12 More Screenshots</strong></summary>
+
+### Products & Inventory
+
+<p align="center">
+  <img src="screenshots/3.jpg" width="190" alt="Add Product">
+  <img src="screenshots/13.jpg" width="190" alt="Barcode Scanner">
+</p>
+
+### Checkout & Payments
+
+<p align="center">
+  <img src="screenshots/5.jpg" width="190" alt="Shopping Cart">
+  <img src="screenshots/6.jpg" width="190" alt="Shopping Cart">
+  <img src="screenshots/8.jpg" width="190" alt="Shopping Cart">
+  <img src="screenshots/7.jpg" width="190" alt="Shopping Cart">
+  <img src="screenshots/9.jpg" width="190" alt="Shopping Cart">
+  <img src="screenshots/6.jpg" width="190" alt="Payment Methods">
+  <img src="screenshots/10.jpg" width="190" alt="Sale Completed">
+  <img src="screenshots/11.jpg" width="190" alt="Reciept">
+</p>
+
+### Customers & Utang
+
+<p align="center">
+  <img src="screenshots/14.jpg" width="190" alt="Add Customer">
+  <img src="screenshots/16.jpg" width="190" alt="Customer Details">
+  
+</p>
+
+### Transactions & Settings
+
+<p align="center">
+  <img src="screenshots/15.jpg" width="190" alt="Transaction History">
+  
+</p>
+
+</details>
 
 
 ## Technology Stack
