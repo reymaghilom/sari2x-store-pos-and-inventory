@@ -74,7 +74,7 @@ Store connectivity can be unreliable, so the app is built **offline-first**. Eve
   
 </p>
 
-### Transactions & Settings
+### Transaction
 
 <p align="center">
   <img src="screenshots/15.jpg" width="190" alt="Transaction History">
